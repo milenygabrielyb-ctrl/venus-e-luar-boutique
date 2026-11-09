@@ -612,6 +612,8 @@ function getFrontendHtml() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vênus e Luar Boutique | Moda, Pet & Café</title>
+  <meta name="google-site-verification" content="google2ef8e32b21200174" />
+  <meta name="google-site-verification" content="google2ef8e32b21200174.html" />
   <link rel="icon" type="image/jpeg" href="/logo.jpg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -3126,6 +3128,13 @@ const server = http.createServer((req, res) => {
       res.end(fallbackSvg);
       return;
     }
+  }
+
+  // Verificação Google Search Console (Arquivo HTML e Meta)
+  if (pathname === '/google2ef8e32b21200174.html' || (pathname && pathname.startsWith('/google') && pathname.endsWith('.html'))) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('google-site-verification: google2ef8e32b21200174.html');
+    return;
   }
 
   // Servir HTML da SPA na raiz com No-Cache explícito

@@ -1,0 +1,96 @@
+[
+  {
+    "id_usuario": "usr_admin_01",
+    "nome_completo": "Administradora Vênus e Luar",
+    "email": "admin@butique.com",
+    "senha_hash": "scrypt:16384:8:1:4d5920831acc0deb1913ec6f2bd451fe:7cf72c9c152b6883a187f142df1f9a7fb85c02907fe694b73c81eef1dc166e43bfe73e2d4861cdc034861057bfe527d49db3dfa56cc4610aa5599a79fd5d093c",
+    "role": "admin",
+    "criado_em": "2026-11-08T22:40:30.220Z",
+    "ultimo_acesso": "2026-11-09T00:21:52.460Z"
+  },
+  {
+    "id_usuario": "usr_1794177648690",
+    "nome_completo": "Camila Rocha",
+    "email": "camila@luxo.com",
+    "senha_hash": "1c9cd266c7c0028b335018275be3d13d28af37534889a5cbe59fb7ee0a160062390fbaf85dc17cb7cda79fa18233fdcdc17f9a7bb7616d87f0d88587cf56329c",
+    "role": "cliente",
+    "criado_em": "2026-11-08T22:40:48.690Z",
+    "ultimo_acesso": "2026-11-08T22:40:48.690Z"
+  },
+  {
+    "id_usuario": "usr_1794177977635",
+    "nome_completo": "teste",
+    "email": "teste@gmail.com",
+    "senha_hash": "54ab59da396d0fd1a1c9bb20d328b2fb358fceef89e5bc624ef499fc7c2dd21a4cce40641b5ed459c0956457e04ca017813e44dfc09b2b010944c94e05b1d89f",
+    "role": "cliente",
+    "criado_em": "2026-11-08T22:46:17.635Z",
+    "ultimo_acesso": "2026-11-08T22:46:17.635Z"
+  },
+  {
+    "id_usuario": "usr_1794178426504",
+    "nome_completo": "teste",
+    "email": "teste@butique.com",
+    "senha_hash": "36ba80861f1e9683f74462b72d28d72f7f9dfee7b69fe836311283710a6365ae132620938ad9349dd43b0b6828a5c67ba1ee559becf4364ffc520dad17d5da09",
+    "role": "cliente",
+    "criado_em": "2026-11-08T22:53:46.504Z",
+    "ultimo_acesso": "2026-11-08T22:53:46.504Z"
+  },
+  {
+    "id_usuario": "usr_1794179006812",
+    "nome_completo": "Isadora Fonseca",
+    "email": "isadora.luxo@luxo.com",
+    "senha_hash": "scrypt:16384:8:1:ad325e3e6c7b0a118c381c3324ab1a78:937570be19ae1ff092e8806f47f501580d26485607bc68a6089cd60f810abb197c8dbdb25786bc6df4f5f76c0bab3e177bda642a37ef94bddd7e4c698a53c1bb",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:03:26.812Z",
+    "ultimo_acesso": "2026-11-08T23:03:26.812Z"
+  },
+  {
+    "id_usuario": "usr_1794179101979",
+    "nome_completo": "Mileny Gabriely Bergamini Vieira",
+    "email": "testetesteteste0000002121@gmail.com",
+    "senha_hash": "scrypt:16384:8:1:82b0bb969ba5467bf84ed025c177f369:aea69d2e94b48ac7e0b14de1bd073d76e4c36c81acd3c5343438efb7c2f515898e57c43f78562bdd581b9aefa6fef2f63b02bf2d23f4b6bbc975425bf2e237cb",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:05:01.979Z",
+    "ultimo_acesso": "2026-11-08T23:05:01.979Z"
+  },
+  {
+    "id_usuario": "usr_1794179969172",
+    "nome_completo": "Helena Alencar",
+    "email": "cliente_1794179969172@teste.com",
+    "cpf": "529.982.247-25",
+    "senha_hash": "scrypt:16384:8:1:01d6aa70792f75d015200a382fc856b4:7cb21627865e4b73ab1ab85cb0bfc750e71554aa3ab9ac1e3a69563a387739dbe3ef3ac6cfb817df2201221b9b43d51df88b71ee68b8dab0185c2cf80e97b16d",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:19:29.172Z",
+    "ultimo_acesso": "2026-11-08T23:19:29.172Z"
+  },
+  {
+    "id_usuario": "usr_1794180251993",
+    "nome_completo": "Mileny Gabriely teste",
+    "email": "testemih@gmail.com",
+    "cpf": "357.615.230-00",
+    "senha_hash": "scrypt:16384:8:1:5a1ae577da01d39160c5cbf1445cad17:222410e55fa6ac34b85816ed35ea658bb40c0a7ad7f0d0bbc3cd6493195dc3f27001b61b1a6d7b0cb828eefd1d95c474685d1b80e7d9c803850fa4e9486c8de5",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:24:11.993Z",
+    "ultimo_acesso": "2026-11-08T23:24:11.993Z"
+  },
+  {
+    "id_usuario": "usr_1794180906493",
+    "nome_completo": "Viviane Siqueira",
+    "email": "cliente_recupera_1794180906491@teste.com",
+    "cpf": "814.282.900-28",
+    "senha_hash": "scrypt:16384:8:1:3a0b2c49f7ca6c99a11abb37f56dcf93:20ad6ab84b57be19b846ae622dd45e66282ae4a790d92f2d30fd599d2b8740942bc0cad7344ec47cc4b0ee9d982ed3840c809dfdfceed802af1f840ca7230fed",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:35:06.493Z",
+    "ultimo_acesso": "2026-11-08T23:35:06.862Z"
+  },
+  {
+    "id_usuario": "usr_1794181107160",
+    "nome_completo": "Mileny Gabriely Bergamini Vieira",
+    "email": "milenygabrielyb@gmail.com",
+    "cpf": "614.709.260-08",
+    "senha_hash": "scrypt:16384:8:1:cc200f7e49e1bbf571e4afefc80b8fe2:53a39de31fa73bfacf52689c0dba4b7e34cf1a9b0861201c8bc6b5102668ac7773765f895b13a544706f3ad1a12190759ab8e38c139d61fe1f7438141ee16865",
+    "role": "cliente",
+    "criado_em": "2026-11-08T23:38:27.160Z",
+    "ultimo_acesso": "2026-11-08T23:38:27.160Z"
+  }
+]

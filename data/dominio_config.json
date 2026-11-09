@@ -1,0 +1,14 @@
+{
+  "dominio": "venuseluar.com.br",
+  "url_base": "https://venuseluar.com.br",
+  "nome_marca": "Vênus e Luar Boutique",
+  "email_atendimento": "atendimento@venuseluar.com.br",
+  "email_contato": "contato@venuseluar.com.br",
+  "email_seguranca": "seguranca@venuseluar.com.br",
+  "provedor_registro": "Registro.br",
+  "provedor_email": "google_workspace",
+  "ip_servidor": "185.199.108.153",
+  "ssl_ativo": true,
+  "criado_em": "2026-11-08T21:09:00.000Z",
+  "atualizado_em": "2026-11-09T00:21:52.477Z"
+}

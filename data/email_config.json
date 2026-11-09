@@ -1,0 +1,9 @@
+{
+  "provedor": "gmail",
+  "host": "smtp.gmail.com",
+  "port": 465,
+  "secure": true,
+  "user": "suaboutique.teste@gmail.com",
+  "pass": "abcd efgh ijkl mnop",
+  "remetente": "Vênus e Luar Boutique Oficial"
+}

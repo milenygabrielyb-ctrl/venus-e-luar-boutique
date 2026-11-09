@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: venus-e-luar-boutique
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node app-server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.10.0

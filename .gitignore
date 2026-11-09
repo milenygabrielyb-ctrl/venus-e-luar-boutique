@@ -1,0 +1,8 @@
+node_modules/
+.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+check_escapes.js
+fix_*.js
+format_*.js

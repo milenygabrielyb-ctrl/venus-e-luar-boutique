@@ -1,0 +1,226 @@
+[
+  {
+    "id_produto": 1,
+    "nome_item": "Vestido Noite Estrelada em Seda Pura",
+    "categoria": "Moda",
+    "preco": 389.9,
+    "estoque": 12,
+    "atributos": {
+      "tamanho": "M",
+      "estacao": "noite / alta costura",
+      "tecido": "seda pura acetinada",
+      "cor": "Azul Meia-Noite com Brilho Dourado",
+      "corte": "Evasê Fluído",
+      "grades_disponiveis": [
+        "PP",
+        "P",
+        "M",
+        "G"
+      ]
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Vestido autoral exclusivo Vênus e Luar, com caimento acetinado fluido e detalhes cintilantes sob a luz.",
+    "ativo": true
+  },
+  {
+    "id_produto": 2,
+    "nome_item": "Vestido Floral Midi Linho & Algodão",
+    "categoria": "Moda",
+    "preco": 298,
+    "estoque": 15,
+    "atributos": {
+      "tamanho": "M",
+      "estacao": "primavera / verao",
+      "tecido": "linho nobre e algodão egípcio",
+      "cor": "Off-white Floral Suave",
+      "corte": "Midi Elegance",
+      "grades_disponiveis": [
+        "P",
+        "M",
+        "G"
+      ]
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Vestido clássico e romântico, perfeito para tardes de chá e encontros no nosso bistrô.",
+    "ativo": true
+  },
+  {
+    "id_produto": 3,
+    "nome_item": "Blazer Alfaiataria Luar Champagne",
+    "categoria": "Moda",
+    "preco": 459,
+    "estoque": 8,
+    "atributos": {
+      "tamanho": "G",
+      "estacao": "todas",
+      "tecido": "alfaiataria italiana premium",
+      "cor": "Champagne Perolado",
+      "forrado": true,
+      "grades_disponiveis": [
+        "PP",
+        "P",
+        "M",
+        "G"
+      ]
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Blazer estruturado com botões banhados a ouro suave e corte impecável de alta alfaiataria.",
+    "ativo": true
+  },
+  {
+    "id_produto": 4,
+    "nome_item": "Bolsa Baguete Constelação Couro Legítimo",
+    "categoria": "Moda",
+    "preco": 369,
+    "estoque": 6,
+    "atributos": {
+      "material": "couro nobre legítimo ecológico",
+      "cor": "Preto Celestial",
+      "fecho": "ouro envelhecido com astro vazado",
+      "compartimentos": 3
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Acessório sofisticado feito à mão, com fecho magnético em formato de astro e forro de veludo.",
+    "ativo": true
+  },
+  {
+    "id_produto": 5,
+    "nome_item": "Cama Nuvem Ortopédica Veludo Plush",
+    "categoria": "Pet",
+    "preco": 198.9,
+    "estoque": 12,
+    "atributos": {
+      "tamanho_pet": "M",
+      "indicacao": "cães e gatos",
+      "lavavel": true,
+      "enchimento": "espuma viscoelástica antialérgica",
+      "cor": "Azul Noite & Ouro Suave"
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Conforto celestial com memória elástica e tecido aveludado que acalma o seu companheiro pet.",
+    "ativo": true
+  },
+  {
+    "id_produto": 6,
+    "nome_item": "Coleira e Guia Nobre Ferragens Ouro Escovado",
+    "categoria": "Pet",
+    "preco": 129,
+    "estoque": 25,
+    "atributos": {
+      "tamanho_pet": "P/M",
+      "indicacao": "todos os portes",
+      "material": "couro botânico legítimo",
+      "ferragens": "latão e ouro escovado",
+      "inclui_placa_gravacao": true
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Conjunto durável e nobre, desenhado para harmonizar com o luxo e o amor pelo seu pet.",
+    "ativo": true
+  },
+  {
+    "id_produto": 7,
+    "nome_item": "Snack Gourmet Salmão & Alecrim Fresco 150g",
+    "categoria": "Pet",
+    "preco": 36.9,
+    "estoque": 40,
+    "atributos": {
+      "tipo": "petisco funcional premium",
+      "ingredientes_nobres": true,
+      "livre_corantes": true,
+      "indicacao": "cães adultos e idosos"
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Petisco 100% natural rico em Ômega-3 para pelagem sedosa e saúde articular de quatro patas.",
+    "ativo": true
+  },
+  {
+    "id_produto": 8,
+    "nome_item": "Brinquedo Trança Algodão Orgânico & Seda",
+    "categoria": "Pet",
+    "preco": 48,
+    "estoque": 18,
+    "atributos": {
+      "tamanho_pet": "M/G",
+      "indicacao": "cães mordedores",
+      "material": "algodão cru sustentável",
+      "ajuda_tartaro": true
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1535294435445-d7249524ef2e?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Resistente, seguro e atóxico. Cuida da saúde bucal do pet com estética suave.",
+    "ativo": true
+  },
+  {
+    "id_produto": 9,
+    "nome_item": "Cappuccino Vênus & Luar com Toque de Canela",
+    "categoria": "Cafeteria",
+    "preco": 19.5,
+    "estoque": 100,
+    "atributos": {
+      "volume_ml": 240,
+      "tipo_leite": "vegetal ou integral",
+      "grao": "Catuaí Vermelho Artesanal 88 pts",
+      "opcoes_leite": [
+        "Aveia Barista",
+        "Amêndoas",
+        "Integral Fresco",
+        "Sem Lactose"
+      ],
+      "temperatura": "quente"
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Espresso duplo cremoso com leite vaporizado aveludado e polvilhado de canela e cacau 70%.",
+    "ativo": true
+  },
+  {
+    "id_produto": 10,
+    "nome_item": "Croissant Dourado de Amêndoas & Frangipane",
+    "categoria": "Cafeteria",
+    "preco": 24,
+    "estoque": 25,
+    "atributos": {
+      "fermentacao": "natural 36h francesa",
+      "recheio": "creme frangipane de amêndoas",
+      "cobertura": "amêndoas laminadas tostadas",
+      "vegano": false
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Folhado dourado crocante e amanteigado, assado fresco nas manhãs da boutique.",
+    "ativo": true
+  },
+  {
+    "id_produto": 11,
+    "nome_item": "Cold Brew Infusão Cítrica & Flores de Laranjeira",
+    "categoria": "Cafeteria",
+    "preco": 21,
+    "estoque": 50,
+    "atributos": {
+      "volume_ml": 350,
+      "extracao": "a frio por 20 horas",
+      "grao": "Mogiana Paulista Especial",
+      "acidez": "brilhante floral e frutada",
+      "vegano": true
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Extração lenta com gelo cristalino, extremamente refrescante e aromático.",
+    "ativo": true
+  },
+  {
+    "id_produto": 12,
+    "nome_item": "Toast Rústico Queijo Brie da Serra & Mel Puro",
+    "categoria": "Cafeteria",
+    "preco": 29.5,
+    "estoque": 20,
+    "atributos": {
+      "pao": "sourdough fermentação lenta",
+      "ingredientes": [
+        "Queijo Brie",
+        "Mel Silvestre Puro",
+        "Nozes Pecan caramelizadas"
+      ],
+      "vegetariano": true
+    },
+    "imagem_url": "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80",
+    "descricao": "Pão de fermentação natural tostado na manteiga de fazenda com queijo brie derretido e mel.",
+    "ativo": true
+  }
+]

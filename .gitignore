@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente e segredos locais
+.env
+.env.*
+
+# Logs do Node e gerenciadores de pacotes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Scripts e arquivos temporários de teste local
+check_escapes.js
+fix_*.js
+format_*.js
+test_*.js
+integrate_dominio.js
+scratch_test.html
+admin_tab_dominio.txt
+screenshot_*.png
+
+# Arquivos de dados persistentes gerados em tempo de execução
+# Garante que o ambiente de produção/deploy NÃO veja os cadastros e testes feitos localmente
+data/*.json
+!data/.gitkeep
+
+# Arquivos de mídia enviados localmente (uploads da galeria ou computador)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini

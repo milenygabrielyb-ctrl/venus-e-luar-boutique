@@ -41,30 +41,9 @@ const LISTA_NEGRA_TERMOS = [
 // VALIDAÇÃO OFICIAL DE CPF (MÓDULO 11 DA RECEITA FEDERAL) & PROIBIÇÃO DE FICTÍCIOS
 // =========================================================================
 function validarCpf(cpf) {
-  if (!cpf || typeof cpf !== 'string') return false;
-  const limpo = cpf.replace(/\D/g, '');
+  if (!cpf) return false;
+  const limpo = String(cpf).replace(/\D/g, '');
   if (limpo.length !== 11) return false;
-  // Bloqueia CPFs com dígitos todos repetidos (ex: 00000000000, 11111111111)
-  if (/^(\d)\1{10}$/.test(limpo)) return false;
-
-  // 1º Dígito Verificador (Módulo 11)
-  let soma = 0;
-  for (let i = 0; i < 9; i++) {
-    soma += parseInt(limpo.charAt(i), 10) * (10 - i);
-  }
-  let resto = (soma * 10) % 11;
-  let d1 = (resto === 10 || resto === 11) ? 0 : resto;
-  if (d1 !== parseInt(limpo.charAt(9), 10)) return false;
-
-  // 2º Dígito Verificador (Módulo 11)
-  soma = 0;
-  for (let i = 0; i < 10; i++) {
-    soma += parseInt(limpo.charAt(i), 10) * (11 - i);
-  }
-  resto = (soma * 10) % 11;
-  let d2 = (resto === 10 || resto === 11) ? 0 : resto;
-  if (d2 !== parseInt(limpo.charAt(10), 10)) return false;
-
   return true;
 }
 
@@ -1483,23 +1462,8 @@ function getFrontendHtml() {
 
       const validarCpf = (cpf) => {
         if (!cpf) return false;
-        const limpo = cpf.replace(/\D/g, '');
+        const limpo = String(cpf).replace(/\D/g, '');
         if (limpo.length !== 11) return false;
-        const cpfsFicticios = ['00000000000', '11111111111', '22222222222', '33333333333', '44444444444', '55555555555', '66666666666', '77777777777', '88888888888', '99999999999'];
-        if (cpfsFicticios.indexOf(limpo) !== -1) return false;
-
-        let soma = 0;
-        for (let i = 0; i < 9; i++) soma += parseInt(limpo.charAt(i), 10) * (10 - i);
-        let resto = (soma * 10) % 11;
-        let d1 = (resto === 10 || resto === 11) ? 0 : resto;
-        if (d1 !== parseInt(limpo.charAt(9), 10)) return false;
-
-        soma = 0;
-        for (let i = 0; i < 10; i++) soma += parseInt(limpo.charAt(i), 10) * (11 - i);
-        resto = (soma * 10) % 11;
-        let d2 = (resto === 10 || resto === 11) ? 0 : resto;
-        if (d2 !== parseInt(limpo.charAt(10), 10)) return false;
-
         return true;
       };
 
@@ -3567,13 +3531,18 @@ function getFrontendHtml() {
                       <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
                         CPF Oficial
                       </label>
-                      {usuario.cpf_alterado ? (
+                      {usuario.role === 'admin' ? (
+                        <span className="text-[10px] text-ouro font-semibold flex items-center gap-1">
+                          <span>✦</span>
+                          <span>Administradora (Edição Livre)</span>
+                        </span>
+                      ) : usuario.cpf_alterado ? (
                         <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
                           <span>🔒</span>
                           <span>Bloqueado (1 alteração já realizada)</span>
                         </span>
                       ) : (
-                        <span className="text-[10px] text-ouro/80 font-medium">
+                        <span className="text-[10px] text-emerald-300 font-medium">
                           ✦ Permite 1 alteração
                         </span>
                       )}
@@ -3583,26 +3552,30 @@ function getFrontendHtml() {
                       name="perfil_cpf" 
                       value={perfilCpf} 
                       onChange={(e) => {
-                        if (!usuario.cpf_alterado) {
+                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
                           setPerfilCpf(formatarCpf(e.target.value));
                         }
                       }}
-                      disabled={!!usuario.cpf_alterado}
+                      disabled={usuario.role !== 'admin' && !!usuario.cpf_alterado}
                       maxLength="14"
                       placeholder="000.000.000-00" 
                       className={"w-full p-3 rounded-xl text-xs font-mono outline-none " + (
-                        usuario.cpf_alterado 
+                        (usuario.role !== 'admin' && usuario.cpf_alterado)
                           ? 'bg-celestial-950/60 border border-stone-700/60 text-stone-400 cursor-not-allowed'
                           : 'bg-celestial-950 border border-ouro/30 text-luar-100 focus:border-ouro'
                       )} 
                     />
-                    {usuario.cpf_alterado ? (
+                    {usuario.role === 'admin' ? (
+                      <p className="text-[10.5px] text-ouro/70 mt-1">
+                        Como administradora, você pode alterar e atualizar seu CPF a qualquer momento.
+                      </p>
+                    ) : usuario.cpf_alterado ? (
                       <p className="text-[10.5px] text-stone-400 mt-1">
                         Por motivos de segurança e integridade cadastral, o CPF foi bloqueado após a primeira retificação. Para alterações adicionais, solicite suporte à administração.
                       </p>
                     ) : (
                       <p className="text-[10.5px] text-ouro/70 mt-1">
-                        Atenção: Você pode alterar seu CPF apenas 1 vez pelo autoatendimento.
+                        Atenção: Você pode cadastrar ou alterar seu CPF apenas 1 vez pelo autoatendimento.
                       </p>
                     )}
                   </div>
@@ -7926,36 +7899,42 @@ const server = http.createServer((req, res) => {
           user.foto_perfil = foto_perfil || null;
         }
 
-        // 4. CPF (REGRA: O PRÓPRIO USUÁRIO PODE ALTERAR O CPF APENAS 1 VEZ)
+        // 4. CPF (REGRA: O PRÓPRIO USUÁRIO PODE ALTERAR O CPF APENAS 1 VEZ; ADMIN NUNCA É BLOQUEADO)
         if (cpf !== undefined && cpf !== null && typeof cpf === 'string') {
           const cpfLimpo = cpf.replace(/\D/g, '');
           const cpfAtualLimpo = (user.cpf || '').replace(/\D/g, '');
           
-          if (cpfLimpo && cpfLimpo !== cpfAtualLimpo) {
-            // Se o usuário já alterou o CPF anteriormente, bloqueia
-            if (user.cpf_alterado) {
-              res.writeHead(403, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                erro: 'O CPF só pode ser alterado uma única vez pelo próprio usuário. Para novas retificações, contate o administrador da boutique.' 
-              }));
-              return;
-            }
+          if (cpfLimpo !== cpfAtualLimpo) {
+            if (cpfLimpo.length > 0) {
+              // Se não for admin e o usuário já alterou o CPF anteriormente, bloqueia
+              if (user.role !== 'admin' && user.cpf_alterado) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                  erro: 'O CPF só pode ser alterado uma única vez pelo próprio usuário. Para novas retificações, contate o administrador da boutique.' 
+                }));
+                return;
+              }
 
-            if (!validarCpf(cpfLimpo)) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ erro: 'CPF inválido ou fictício. O CPF deve atender ao Módulo 11 da Receita Federal.' }));
-              return;
-            }
+              if (!validarCpf(cpfLimpo)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ erro: 'O CPF deve conter exatamente 11 dígitos numéricos.' }));
+                return;
+              }
 
-            // Verifica unicidade
-            if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
-              res.writeHead(409, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ erro: 'Este CPF já está cadastrado em outra conta.' }));
-              return;
-            }
+              // Verifica unicidade
+              if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+                res.writeHead(409, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ erro: 'Este CPF já está cadastrado em outra conta.' }));
+                return;
+              }
 
-            user.cpf = formatarCpf(cpfLimpo);
-            user.cpf_alterado = true;
+              user.cpf = formatarCpf(cpfLimpo);
+              if (user.role !== 'admin') {
+                user.cpf_alterado = true;
+              }
+            } else if (user.role === 'admin') {
+              user.cpf = null;
+            }
           }
         }
 
@@ -8052,7 +8031,7 @@ const server = http.createServer((req, res) => {
           if (cpfLimpo.length > 0) {
             if (!validarCpf(cpfLimpo)) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ erro: 'CPF inválido pelo Módulo 11 da Receita Federal.' }));
+              res.end(JSON.stringify({ erro: 'O CPF deve conter exatamente 11 dígitos numéricos.' }));
               return;
             }
             if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {

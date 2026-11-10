@@ -1039,6 +1039,41 @@ function getFrontendHtml() {
       const [verSenhaEmailSmtp, setVerSenhaEmailSmtp] = useState(false);
       const [verCvvCartao, setVerCvvCartao] = useState(false);
 
+      // Estados para Cadastro Simplificado de Peças (Seletores Intuitivos sem JSON manual)
+      const [categoriaNovoProduto, setCategoriaNovoProduto] = useState('Moda');
+      const [modoAtributosAvancado, setModoAtributosAvancado] = useState(false);
+      const [fotoNovoProdutoUrl, setFotoNovoProdutoUrl] = useState('');
+      const [fotoNovoProdutoPreview, setFotoNovoProdutoPreview] = useState('');
+      const [uploadingFotoProduto, setUploadingFotoProduto] = useState(false);
+
+      // Atributos Específicos para Moda
+      const [tamanhoModa, setTamanhoModa] = useState('M');
+      const [gradesModa, setGradesModa] = useState(['PP', 'P', 'M', 'G']);
+      const [corModa, setCorModa] = useState('Azul Meia-Noite');
+      const [tecidoModa, setTecidoModa] = useState('Seda pura acetinada');
+      const [corteModa, setCorteModa] = useState('Evasê Fluído');
+      const [estacaoModa, setEstacaoModa] = useState('Noite / Alta Costura');
+
+      // Atributos Específicos para Pet
+      const [portePet, setPortePet] = useState('Médio');
+      const [indicacaoPet, setIndicacaoPet] = useState('Cães e Gatos');
+      const [materialPet, setMaterialPet] = useState('Veludo plush e espuma ortopédica');
+      const [lavavelPet, setLavavelPet] = useState(true);
+      const [antialergicoPet, setAntialergicoPet] = useState(true);
+
+      // Atributos Específicos para Cafeteria
+      const [volumeCafeteria, setVolumeCafeteria] = useState('240ml (Caneca)');
+      const [temperaturaCafeteria, setTemperaturaCafeteria] = useState('Quente');
+      const [graoCafeteria, setGraoCafeteria] = useState('Catuaí Vermelho Artesanal 88 pts');
+      const [opcoesLeiteCafeteria, setOpcoesLeiteCafeteria] = useState(['Integral Fresco', 'Aveia Barista', 'Amêndoas', 'Sem Lactose']);
+      const [veganoCafeteria, setVeganoCafeteria] = useState(false);
+      const [vegetarianoCafeteria, setVegetarianoCafeteria] = useState(true);
+      const [semGlutenCafeteria, setSemGlutenCafeteria] = useState(false);
+
+      // JSON Manual opcional (Modo Avançado)
+      const [atributosManualJson, setAtributosManualJson] = useState(JSON.stringify({ tamanho: "M", tecido: "seda pura acetinada", cor: "Azul Noturno com Brilho Dourado", corte: "Evasê Fluído" }, null, 2));
+      const [verAtributosTecnico, setVerAtributosTecnico] = useState(false);
+
       const renderBotaoOlhoSenha = (visivel, aoAlternar, id = '') => (
         <button
           type="button"
@@ -2421,13 +2456,42 @@ function getFrontendHtml() {
                   </div>
                 </div>
                 <p className="text-xs text-luar-300 leading-relaxed font-light">{produtoModal.descricao}</p>
-                <div className="border-t border-ouro/20 pt-3 space-y-2">
-                  <span className="text-xs font-bold text-ouro flex items-center gap-1.5">
-                    <span className="text-ouro font-serif">✦</span> Atributos Dinâmicos Armazenados no PostgreSQL (JSONB):
-                  </span>
-                  <pre className="p-3.5 bg-celestial-950 text-ouro-light text-xs rounded-xl font-mono overflow-x-auto border border-ouro/20">
-                    {JSON.stringify(produtoModal.atributos, null, 2)}
-                  </pre>
+                <div className="border-t border-ouro/20 pt-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-ouro flex items-center gap-1.5">
+                      <span className="text-ouro font-serif">✦</span> Especificações da Peça:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVerAtributosTecnico(!verAtributosTecnico)}
+                      className="text-[10px] text-ouro/70 hover:text-ouro underline cursor-pointer"
+                    >
+                      {verAtributosTecnico ? 'Visualizar em Cartões' : 'Ver JSONB Técnico'}
+                    </button>
+                  </div>
+
+                  {verAtributosTecnico ? (
+                    <pre className="p-3.5 bg-celestial-950 text-ouro-light text-xs rounded-xl font-mono overflow-x-auto border border-ouro/20">
+                      {JSON.stringify(produtoModal.atributos, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {produtoModal.atributos && typeof produtoModal.atributos === 'object' && !Array.isArray(produtoModal.atributos) ? (
+                        Object.entries(produtoModal.atributos).map(([chave, valor]) => (
+                          <div key={chave} className="p-2.5 rounded-xl bg-celestial-950/80 border border-ouro/25">
+                            <span className="text-[10px] uppercase font-bold text-ouro/70 tracking-wider block capitalize">
+                              {chave.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-xs text-luar-100 font-medium block truncate" title={String(Array.isArray(valor) ? valor.join(', ') : valor)}>
+                              {Array.isArray(valor) ? valor.join(', ') : String(valor)}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-luar-300 italic col-span-2">Sem especificações adicionais.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -4199,12 +4263,45 @@ function getFrontendHtml() {
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     let parsedAtributos = {};
-                    try { 
-                      parsedAtributos = JSON.parse(e.target.atributos.value); 
-                    } catch(err) { 
-                      alert('JSON de atributos inválido. Corrija o formato.'); 
-                      return; 
+                    if (modoAtributosAvancado) {
+                      try { 
+                        parsedAtributos = JSON.parse(atributosManualJson || '{}'); 
+                      } catch(err) { 
+                        alert('JSON de atributos inválido. Corrija o formato ou volte aos seletores visuais.'); 
+                        return; 
+                      }
+                    } else {
+                      if (categoriaNovoProduto === 'Moda') {
+                        parsedAtributos = {
+                          tamanho: tamanhoModa,
+                          grade_disponivel: gradesModa.join(', '),
+                          cor: corModa,
+                          tecido: tecidoModa,
+                          corte: corteModa,
+                          ocasiao: estacaoModa
+                        };
+                      } else if (categoriaNovoProduto === 'Pet') {
+                        parsedAtributos = {
+                          indicacao: indicacaoPet,
+                          porte: portePet,
+                          material: materialPet,
+                          lavavel_em_maquina: lavavelPet ? 'Sim' : 'Não',
+                          antialergico: antialergicoPet ? 'Sim' : 'Não'
+                        };
+                      } else if (categoriaNovoProduto === 'Cafeteria') {
+                        parsedAtributos = {
+                          volume: volumeCafeteria,
+                          temperatura: temperaturaCafeteria,
+                          grao_ingrediente: graoCafeteria,
+                          opcoes_leite: opcoesLeiteCafeteria.join(', '),
+                          vegano: veganoCafeteria ? 'Sim' : 'Não',
+                          vegetariano: vegetarianoCafeteria ? 'Sim' : 'Não',
+                          sem_gluten: semGlutenCafeteria ? 'Sim' : 'Não'
+                        };
+                      }
                     }
+
+                    const urlImagemFinal = fotoNovoProdutoUrl || (e.target.imagem && e.target.imagem.value) || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=800&q=80';
 
                     const res = await fetch('/api/produtos', {
                       method: 'POST',
@@ -4215,11 +4312,11 @@ function getFrontendHtml() {
                       body: JSON.stringify({
                         token,
                         nome_item: e.target.nome.value,
-                        categoria: e.target.categoria.value,
+                        categoria: categoriaNovoProduto,
                         preco: Number(e.target.preco.value),
                         estoque: 10,
                         atributos: parsedAtributos,
-                        imagem_url: e.target.imagem.value || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=800&q=80',
+                        imagem_url: urlImagemFinal,
                         descricao: e.target.descricao.value
                       })
                     });
@@ -4228,11 +4325,13 @@ function getFrontendHtml() {
                     if (res.ok) {
                       mostrarNotificacao('Nova peça cadastrada com sucesso no banco de dados!');
                       setIsAdminOpen(false);
+                      setFotoNovoProdutoUrl('');
+                      setFotoNovoProdutoPreview('');
                       carregarDados();
                     } else {
                       alert(json.erro || 'Erro ao cadastrar peça. Permissão recusada.');
                     }
-                  }} className="space-y-3.5">
+                  }} className="space-y-4">
                     <div>
                       <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">Nome da Peça / Produto</label>
                       <input name="nome" required placeholder="Ex: Vestido Estelar em Seda Pura" className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none" />
@@ -4241,7 +4340,12 @@ function getFrontendHtml() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">Categoria</label>
-                        <select name="categoria" className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none">
+                        <select
+                          name="categoria"
+                          value={categoriaNovoProduto}
+                          onChange={(e) => setCategoriaNovoProduto(e.target.value)}
+                          className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                        >
                           <option value="Moda">Moda (Alta Costura)</option>
                           <option value="Pet">Pet Shop</option>
                           <option value="Cafeteria">Cafeteria</option>
@@ -4254,18 +4358,442 @@ function getFrontendHtml() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">URL da Foto</label>
-                      <input name="imagem" placeholder="https://images.unsplash.com/..." className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none" />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">Foto da Peça / Produto</label>
+                        <span className="text-[10px] text-luar-300">Galeria, PC ou Link direto</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                        <label className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-celestial-900 border border-ouro/40 text-ouro hover:bg-ouro hover:text-celestial-950 font-bold text-xs cursor-pointer transition-all shadow-sm shrink-0">
+                          <span>📷</span>
+                          <span>{uploadingFotoProduto ? 'Processando foto...' : 'Escolher da Galeria ou PC'}</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            disabled={uploadingFotoProduto}
+                            onChange={(e) => {
+                              const arq = e.target.files && e.target.files[0];
+                              if (!arq) return;
+                              setUploadingFotoProduto(true);
+                              processarUploadImagem(
+                                arq,
+                                (url) => {
+                                  setUploadingFotoProduto(false);
+                                  setFotoNovoProdutoUrl(url);
+                                  setFotoNovoProdutoPreview(url);
+                                  mostrarNotificacao('Foto carregada com sucesso!', 'sucesso');
+                                },
+                                (err) => {
+                                  setUploadingFotoProduto(false);
+                                  alert('Erro ao enviar foto: ' + err);
+                                }
+                              );
+                            }}
+                          />
+                        </label>
+                        <div className="flex-1 relative">
+                          <input 
+                            name="imagem" 
+                            value={fotoNovoProdutoUrl}
+                            onChange={(e) => {
+                              setFotoNovoProdutoUrl(e.target.value);
+                              setFotoNovoProdutoPreview(e.target.value);
+                            }}
+                            placeholder="Ou cole a URL da imagem (https://...)" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none" 
+                          />
+                        </div>
+                        {fotoNovoProdutoPreview && (
+                          <div className="flex items-center gap-2 shrink-0 bg-celestial-950 p-1.5 rounded-xl border border-ouro/30">
+                            <img src={fotoNovoProdutoPreview} alt="Preview" className="w-9 h-9 rounded-lg object-cover border border-ouro/30" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFotoNovoProdutoUrl('');
+                                setFotoNovoProdutoPreview('');
+                              }}
+                              className="text-xs text-red-400 hover:text-red-300 font-bold px-1.5 cursor-pointer"
+                              title="Remover foto"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">Descrição Detalhada</label>
-                      <textarea name="descricao" placeholder="Detalhes do tecido, acabamentos, corte..." className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none resize-none" rows="2"></textarea>
+                      <textarea name="descricao" placeholder="Detalhes do tecido, acabamentos, corte e proposta da peça..." className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none resize-none" rows="2"></textarea>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">Atributos Dinâmicos (PostgreSQL JSONB com Índice GIN)</label>
-                      <textarea name="atributos" defaultValue='{\n  "tamanho": "M",\n  "tecido": "seda pura acetinada",\n  "cor": "Azul Noturno com Brilho Dourado",\n  "corte": "Evasê Fluído"\n}' className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs font-mono text-ouro-light outline-none" rows="4"></textarea>
+                    {/* SELETORES AMIGÁVEIS DE ATRIBUTOS (SUBSTITUIÇÃO DO JSON MANUAL) */}
+                    <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/35 space-y-3.5 shadow-inner">
+                      <div className="flex items-center justify-between border-b border-ouro/20 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-ouro font-serif">✦</span>
+                          <div>
+                            <span className="block text-xs font-bold text-ouro uppercase tracking-wider">
+                              {'Atributos & Detalhes da Peça (' + categoriaNovoProduto + ')'}
+                            </span>
+                            <span className="block text-[10px] text-luar-300">
+                              {'Seleções rápidas e intuitivas organizadas para ' + (categoriaNovoProduto === 'Moda' ? 'Alta Costura' : categoriaNovoProduto === 'Pet' ? 'o Pet Shop' : 'a Cafeteria')}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setModoAtributosAvancado(!modoAtributosAvancado)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-mono border border-ouro/30 text-ouro/80 hover:text-ouro hover:bg-ouro/10 cursor-pointer transition-colors"
+                        >
+                          {modoAtributosAvancado ? '✨ Voltar aos Seletores' : '{ } Modo JSON'}
+                        </button>
+                      </div>
+
+                      {modoAtributosAvancado ? (
+                        <div>
+                          <label className="block text-[10px] font-mono text-ouro/80 mb-1">JSONB Direto (PostgreSQL GIN):</label>
+                          <textarea
+                            name="atributos"
+                            value={atributosManualJson}
+                            onChange={(e) => setAtributosManualJson(e.target.value)}
+                            rows="4"
+                            className="w-full p-3 rounded-xl bg-celestial-900 border border-ouro/30 text-xs font-mono text-ouro-light outline-none"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-3.5">
+                          {/* SELETORES: MODA */}
+                          {categoriaNovoProduto === 'Moda' && (
+                            <div className="space-y-3">
+                              {/* Tamanho Principal */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Tamanho Principal: <span className="text-luar-100 font-semibold">{tamanhoModa}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único'].map(tam => (
+                                    <button
+                                      key={tam}
+                                      type="button"
+                                      onClick={() => setTamanhoModa(tam)}
+                                      className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (tamanhoModa === tam ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                    >
+                                      {tam}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Grade em Estoque */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Grade Disponível em Estoque:
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['PP', 'P', 'M', 'G', 'GG', 'XG', 'Sob Medida'].map(grade => {
+                                    const ativo = gradesModa.includes(grade);
+                                    return (
+                                      <button
+                                        key={grade}
+                                        type="button"
+                                        onClick={() => {
+                                          setGradesModa(ativo ? gradesModa.filter(g => g !== grade) : [...gradesModa, grade]);
+                                        }}
+                                        className={"px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer flex items-center gap-1 " + (ativo ? 'bg-ouro/20 border border-ouro text-ouro font-bold' : 'bg-celestial-900 border border-ouro/20 text-luar-300 hover:text-ouro')}
+                                      >
+                                        <span>{ativo ? '✓' : '+'}</span>
+                                        <span>{grade}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Cor com sugestões */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Cor Principal:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={corModa}
+                                  onChange={(e) => setCorModa(e.target.value)}
+                                  placeholder="Ex: Azul Noturno com Fios Dourados"
+                                  className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none mb-1.5"
+                                />
+                                <div className="flex flex-wrap gap-1">
+                                  {['Azul Meia-Noite', 'Dourado Imperial', 'Preto Absoluto', 'Branco Pérola', 'Vinho Borgonha', 'Verde Esmeralda', 'Terracota'].map(c => (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => setCorModa(c)}
+                                      className={"text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all " + (corModa === c ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 text-luar-300 hover:text-ouro border border-ouro/20')}
+                                    >
+                                      {c}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Tecido & Corte */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Tecido / Material:</label>
+                                  <select
+                                    value={tecidoModa}
+                                    onChange={(e) => setTecidoModa(e.target.value)}
+                                    className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                  >
+                                    <option value="Seda pura acetinada">Seda Pura Acetinada</option>
+                                    <option value="Veludo Cristal Francês">Veludo Cristal Francês</option>
+                                    <option value="Linho Rústico Nobre">Linho Rústico Nobre</option>
+                                    <option value="Crepe de Seda Italiano">Crepe de Seda Italiano</option>
+                                    <option value="Renda Chantilly Artesanal">Renda Chantilly Artesanal</option>
+                                    <option value="Brocado com Fios Dourados">Brocado com Fios Dourados</option>
+                                    <option value="Algodão Pima Peruano">Algodão Pima Peruano</option>
+                                    <option value="Tule Bordado com Pedrarias">Tule Bordado com Pedrarias</option>
+                                    <option value="Lã Fina Cashmere">Lã Fina Cashmere</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Corte &amp; Caimento:</label>
+                                  <select
+                                    value={corteModa}
+                                    onChange={(e) => setCorteModa(e.target.value)}
+                                    className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                  >
+                                    <option value="Evasê Fluído">Evasê Fluído</option>
+                                    <option value="Alfaiataria Slim Nobre">Alfaiataria Slim Nobre</option>
+                                    <option value="Oversized Estruturado">Oversized Estruturado</option>
+                                    <option value="Sereia Ajustado">Sereia Ajustado</option>
+                                    <option value="Reto Clássico">Reto Clássico</option>
+                                    <option value="Envelope Transpassado">Envelope Transpassado</option>
+                                    <option value="Godê com Volume">Godê com Volume</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Ocasião / Coleção */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Ocasião / Coleção: <span className="text-luar-100 font-semibold">{estacaoModa}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['Noite / Gala', 'Casual Chic', 'Alta Joalheria', 'Primavera / Verão', 'Outono / Inverno'].map(est => (
+                                    <button
+                                      key={est}
+                                      type="button"
+                                      onClick={() => setEstacaoModa(est)}
+                                      className={"px-2.5 py-1 rounded-lg text-[11px] cursor-pointer transition-all " + (estacaoModa === est ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                    >
+                                      {est}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* SELETORES: PET SHOP */}
+                          {categoriaNovoProduto === 'Pet' && (
+                            <div className="space-y-3">
+                              {/* Indicação / Espécie */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Indicação: <span className="text-luar-100 font-semibold">{indicacaoPet}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['Cães e Gatos', 'Cães Pequenos', 'Cães Grandes', 'Gatos', 'Filhotes'].map(ind => (
+                                    <button
+                                      key={ind}
+                                      type="button"
+                                      onClick={() => setIndicacaoPet(ind)}
+                                      className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (indicacaoPet === ind ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                    >
+                                      {ind}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Porte Recomendado */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Porte Recomendado: <span className="text-luar-100 font-semibold">{portePet}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['Mini (até 3kg)', 'Pequeno (3 a 7kg)', 'Médio (7 a 15kg)', 'Grande (15 a 30kg)', 'Gigante (+30kg)'].map(porte => (
+                                    <button
+                                      key={porte}
+                                      type="button"
+                                      onClick={() => setPortePet(porte)}
+                                      className={"px-2.5 py-1 rounded-lg text-[11px] cursor-pointer transition-all " + (portePet === porte ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                    >
+                                      {porte}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Material / Composição */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Material / Composição:</label>
+                                <select
+                                  value={materialPet}
+                                  onChange={(e) => setMaterialPet(e.target.value)}
+                                  className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                >
+                                  <option value="Veludo plush e espuma ortopédica">Veludo Plush e Espuma Ortopédica</option>
+                                  <option value="Algodão orgânico respirável hipoalergênico">Algodão Orgânico Respirável Hipoalergênico</option>
+                                  <option value="Couro ecológico macio e acolchoado">Couro Ecológico Macio e Acolchoado</option>
+                                  <option value="Microfibra impermeável de alta resistência">Microfibra Impermeável de Alta Resistência</option>
+                                  <option value="Tricô soft aconchegante térmico">Tricô Soft Aconchegante Térmico</option>
+                                  <option value="Nylon náutico reforçado antirasgo">Nylon Náutico Reforçado Antirasgo</option>
+                                </select>
+                              </div>
+
+                              {/* Selos de Cuidado Pet */}
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setLavavelPet(!lavavelPet)}
+                                  className={"p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between " + (lavavelPet ? 'bg-ouro/20 border-ouro text-ouro' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                                >
+                                  <span>🫧 Lavável em Máquina</span>
+                                  <span>{lavavelPet ? '✓ Sim' : '✕ Não'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAntialergicoPet(!antialergicoPet)}
+                                  className={"p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between " + (antialergicoPet ? 'bg-ouro/20 border-ouro text-ouro' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                                >
+                                  <span>🛡️ Hipoalergênico</span>
+                                  <span>{antialergicoPet ? '✓ Sim' : '✕ Não'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* SELETORES: CAFETERIA */}
+                          {categoriaNovoProduto === 'Cafeteria' && (
+                            <div className="space-y-3">
+                              {/* Volume / Porção */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Volume / Porção: <span className="text-luar-100 font-semibold">{volumeCafeteria}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['Dose 50ml', 'Xícara 120ml', 'Caneca 240ml', 'Grande 350ml', 'Porção 100g', 'Fatia 150g'].map(vol => (
+                                    <button
+                                      key={vol}
+                                      type="button"
+                                      onClick={() => setVolumeCafeteria(vol)}
+                                      className={"px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (volumeCafeteria === vol ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                    >
+                                      {vol}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Temperatura */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Temperatura de Serviço: <span className="text-luar-100 font-semibold">{temperaturaCafeteria}</span>
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { rotulo: '☕ Quente', valor: 'Quente' },
+                                    { rotulo: '❄️ Gelado', valor: 'Gelado' },
+                                    { rotulo: '🥐 Ambiente', valor: 'Ambiente' }
+                                  ].map(item => (
+                                    <button
+                                      key={item.valor}
+                                      type="button"
+                                      onClick={() => setTemperaturaCafeteria(item.valor)}
+                                      className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (temperaturaCafeteria === item.valor ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                    >
+                                      {item.rotulo}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Grão Nobre / Ingrediente */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Grão Especial ou Ingrediente Nobre:</label>
+                                <select
+                                  value={graoCafeteria}
+                                  onChange={(e) => setGraoCafeteria(e.target.value)}
+                                  className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                >
+                                  <option value="Catuaí Vermelho Artesanal 88 pts">Catuaí Vermelho Artesanal 88 pts</option>
+                                  <option value="Bourbon Amarelo Vulcânico">Bourbon Amarelo Vulcânico</option>
+                                  <option value="Geisha Especial Premiado">Geisha Especial Premiado</option>
+                                  <option value="Matcha Cerimonial Uji Japão">Matcha Cerimonial Uji Japão</option>
+                                  <option value="Cacau Belga 70% Single Origin">Cacau Belga 70% Single Origin</option>
+                                  <option value="Chá Branco com Flores de Jasmim">Chá Branco com Flores de Jasmim</option>
+                                  <option value="Pistache Siciliano com Flor de Sal">Pistache Siciliano com Flor de Sal</option>
+                                </select>
+                              </div>
+
+                              {/* Opções de Leite Aceitas */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                  Opções de Leite / Base Aceitas:
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['Integral Fresco', 'Aveia Barista', 'Amêndoas', 'Sem Lactose', 'Coco Artesanal'].map(leite => {
+                                    const ativo = opcoesLeiteCafeteria.includes(leite);
+                                    return (
+                                      <button
+                                        key={leite}
+                                        type="button"
+                                        onClick={() => {
+                                          setOpcoesLeiteCafeteria(ativo ? opcoesLeiteCafeteria.filter(l => l !== leite) : [...opcoesLeiteCafeteria, leite]);
+                                        }}
+                                        className={"px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer flex items-center gap-1 " + (ativo ? 'bg-ouro/20 border border-ouro text-ouro font-bold' : 'bg-celestial-900 border border-ouro/20 text-luar-300 hover:text-ouro')}
+                                      >
+                                        <span>{ativo ? '✓' : '+'}</span>
+                                        <span>{leite}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Selos Alimentares */}
+                              <div className="grid grid-cols-3 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setVeganoCafeteria(!veganoCafeteria)}
+                                  className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (veganoCafeteria ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                                >
+                                  <span>🌿 Vegano</span>
+                                  <span>{veganoCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setVegetarianoCafeteria(!vegetarianoCafeteria)}
+                                  className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (vegetarianoCafeteria ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                                >
+                                  <span>🧀 Vegetariano</span>
+                                  <span>{vegetarianoCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSemGlutenCafeteria(!semGlutenCafeteria)}
+                                  className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (semGlutenCafeteria ? 'bg-amber-950/60 border-amber-500 text-amber-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                                >
+                                  <span>🌾 Sem Glúten</span>
+                                  <span>{semGlutenCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <button type="submit" className="w-full py-4 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-widest hover:brightness-110 shadow-lg cursor-pointer">

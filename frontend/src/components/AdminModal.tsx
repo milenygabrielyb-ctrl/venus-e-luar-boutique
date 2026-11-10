@@ -24,6 +24,24 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onProdutoCriado, onPetCr
   const [descricao, setDescricao] = useState('');
   const [atributosJson, setAtributosJson] = useState('{\n  "tamanho": "M",\n  "tecido": "seda natural",\n  "cor": "Dourado Champagne"\n}');
 
+  // Atributos Amigáveis Visuais
+  const [modoAvancado, setModoAvancado] = useState(false);
+  const [tamanhoModa, setTamanhoModa] = useState('M');
+  const [gradesModa, setGradesModa] = useState<string[]>(['PP', 'P', 'M', 'G']);
+  const [corModa, setCorModa] = useState('Dourado Champagne');
+  const [tecidoModa, setTecidoModa] = useState('Seda natural');
+  const [corteModa, setCorteModa] = useState('Evasê Fluído');
+
+  const [portePet, setPortePet] = useState('Médio');
+  const [indicacaoPet, setIndicacaoPet] = useState('Cães e Gatos');
+  const [materialPet, setMaterialPet] = useState('Algodão sustentável e plush');
+  const [lavavelPet, setLavavelPet] = useState(true);
+
+  const [volumeCafeteria, setVolumeCafeteria] = useState('Caneca 240ml');
+  const [temperaturaCafeteria, setTemperaturaCafeteria] = useState('Quente');
+  const [graoCafeteria, setGraoCafeteria] = useState('Catuaí Vermelho 88 pts');
+  const [opcoesLeiteCafeteria, setOpcoesLeiteCafeteria] = useState<string[]>(['Aveia', 'Amêndoas', 'Integral']);
+
   // Form Pet
   const [nomePet, setNomePet] = useState('');
   const [especie, setEspecie] = useState('Cachorro');
@@ -43,12 +61,38 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onProdutoCriado, onPetCr
 
     try {
       let parsedAtributos = {};
-      try {
-        parsedAtributos = JSON.parse(atributosJson);
-      } catch (e) {
-        alert('O JSON de atributos é inválido. Corrija a sintaxe.');
-        setSalvando(false);
-        return;
+      if (modoAvancado) {
+        try {
+          parsedAtributos = JSON.parse(atributosJson);
+        } catch (e) {
+          alert('O JSON de atributos é inválido. Corrija a sintaxe.');
+          setSalvando(false);
+          return;
+        }
+      } else {
+        if (categoria === 'Moda') {
+          parsedAtributos = {
+            tamanho: tamanhoModa,
+            grade_disponivel: gradesModa.join(', '),
+            cor: corModa,
+            tecido: tecidoModa,
+            corte: corteModa
+          };
+        } else if (categoria === 'Pet') {
+          parsedAtributos = {
+            porte: portePet,
+            indicacao: indicacaoPet,
+            material: materialPet,
+            lavavel_em_maquina: lavavelPet ? 'Sim' : 'Não'
+          };
+        } else if (categoria === 'Cafeteria') {
+          parsedAtributos = {
+            volume: volumeCafeteria,
+            temperatura: temperaturaCafeteria,
+            grao: graoCafeteria,
+            opcoes_leite: opcoesLeiteCafeteria.join(', ')
+          };
+        }
       }
 
       const novoProduto = await api.criarProduto({
@@ -271,17 +315,186 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onProdutoCriado, onPetCr
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-boutique-800 mb-1 flex items-center justify-between">
-                  <span>Atributos Flexíveis (Coluna PostgreSQL JSONB)</span>
-                  <span className="text-[10px] text-terracotta font-normal">Indexado via GIN</span>
-                </label>
-                <textarea
-                  rows={4}
-                  value={atributosJson}
-                  onChange={(e) => setAtributosJson(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-boutique-300 text-xs font-mono bg-stone-900 text-emerald-400 outline-none"
-                />
+              <div className="p-4 rounded-2xl bg-boutique-50 border border-boutique-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-boutique-200 pb-2">
+                  <div>
+                    <label className="block text-xs font-bold text-boutique-900">
+                      Atributos &amp; Detalhes da Peça ({categoria})
+                    </label>
+                    <span className="text-[10px] text-boutique-500">Seleções rápidas sem necessidade de escrever JSON</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModoAvancado(!modoAvancado)}
+                    className="text-[11px] font-mono px-2 py-0.5 rounded border border-boutique-300 text-boutique-700 hover:bg-white"
+                  >
+                    {modoAvancado ? '✨ Voltar aos Seletores' : '{ } Modo JSON'}
+                  </button>
+                </div>
+
+                {modoAvancado ? (
+                  <textarea
+                    rows={4}
+                    value={atributosJson}
+                    onChange={(e) => setAtributosJson(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-boutique-300 text-xs font-mono bg-stone-900 text-emerald-400 outline-none"
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {categoria === 'Moda' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Tamanho Base:</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['PP', 'P', 'M', 'G', 'GG', 'Único'].map(tam => (
+                              <button
+                                key={tam}
+                                type="button"
+                                onClick={() => setTamanhoModa(tam)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  tamanhoModa === tam ? 'bg-boutique-900 text-white' : 'bg-white border border-boutique-200 text-boutique-700'
+                                }`}
+                              >
+                                {tam}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Grade em Estoque:</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['PP', 'P', 'M', 'G', 'GG', 'XG'].map(grade => {
+                              const ativo = gradesModa.includes(grade);
+                              return (
+                                <button
+                                  key={grade}
+                                  type="button"
+                                  onClick={() => setGradesModa(ativo ? gradesModa.filter(g => g !== grade) : [...gradesModa, grade])}
+                                  className={`px-2 py-0.5 rounded text-xs transition-all ${
+                                    ativo ? 'bg-terracotta text-white font-bold' : 'bg-white border border-boutique-200 text-boutique-700'
+                                  }`}
+                                >
+                                  {ativo ? '✓ ' : '+ '}{grade}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Cor:</label>
+                            <input
+                              type="text"
+                              value={corModa}
+                              onChange={(e) => setCorModa(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Tecido:</label>
+                            <input
+                              type="text"
+                              value={tecidoModa}
+                              onChange={(e) => setTecidoModa(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {categoria === 'Pet' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Porte:</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['Mini', 'Pequeno', 'Médio', 'Grande'].map(porte => (
+                              <button
+                                key={porte}
+                                type="button"
+                                onClick={() => setPortePet(porte)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  portePet === porte ? 'bg-boutique-900 text-white' : 'bg-white border border-boutique-200 text-boutique-700'
+                                }`}
+                              >
+                                {porte}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Indicação:</label>
+                            <input
+                              type="text"
+                              value={indicacaoPet}
+                              onChange={(e) => setIndicacaoPet(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Material:</label>
+                            <input
+                              type="text"
+                              value={materialPet}
+                              onChange={(e) => setMaterialPet(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {categoria === 'Cafeteria' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Volume / Dose:</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['Dose 50ml', 'Xícara 120ml', 'Caneca 240ml', 'Grande 350ml'].map(vol => (
+                              <button
+                                key={vol}
+                                type="button"
+                                onClick={() => setVolumeCafeteria(vol)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  volumeCafeteria === vol ? 'bg-boutique-900 text-white' : 'bg-white border border-boutique-200 text-boutique-700'
+                                }`}
+                              >
+                                {vol}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Temperatura:</label>
+                            <select
+                              value={temperaturaCafeteria}
+                              onChange={(e) => setTemperaturaCafeteria(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            >
+                              <option value="Quente">☕ Quente</option>
+                              <option value="Gelado">❄️ Gelado</option>
+                              <option value="Ambiente">🥐 Ambiente</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-boutique-700 uppercase mb-1">Grão / Blend:</label>
+                            <input
+                              type="text"
+                              value={graoCafeteria}
+                              onChange={(e) => setGraoCafeteria(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-boutique-300 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <button

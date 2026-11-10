@@ -68,7 +68,14 @@ CREATE INDEX idx_pets_perfil ON pets_adocao USING GIN (perfil);
 
 ## 🚀 Como Executar o Projeto
 
-### Backend:
+### Servidor de Produção Unificado (Monólito Haute Couture):
+```bash
+npm install
+npm start
+# Servidor disponível em: http://localhost:3000
+```
+
+### Backend Tradicional (TypeScript / PostgreSQL):
 ```bash
 cd backend
 npm install
@@ -76,7 +83,7 @@ npm run dev
 # Servidor disponível em: http://localhost:3001
 ```
 
-### Frontend:
+### Frontend Tradicional (Vite / React):
 ```bash
 cd frontend
 npm install

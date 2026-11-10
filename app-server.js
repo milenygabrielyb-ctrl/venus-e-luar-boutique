@@ -1039,6 +1039,32 @@ function getFrontendHtml() {
       const [verSenhaPermissaoCompra, setVerSenhaPermissaoCompra] = useState(false);
       const [verSenhaEmailSmtp, setVerSenhaEmailSmtp] = useState(false);
       const [verCvvCartao, setVerCvvCartao] = useState(false);
+      const [verSenhaPerfil, setVerSenhaPerfil] = useState(false);
+      const [verSenhaAdminEditUser, setVerSenhaAdminEditUser] = useState(false);
+
+      // Estados para Autoatendimento: Configurações do Meu Perfil
+      const [modalPerfilUsuario, setModalPerfilUsuario] = useState(false);
+      const [perfilNome, setPerfilNome] = useState('');
+      const [perfilEmail, setPerfilEmail] = useState('');
+      const [perfilCpf, setPerfilCpf] = useState('');
+      const [perfilNovaSenha, setPerfilNovaSenha] = useState('');
+      const [perfilFotoUrl, setPerfilFotoUrl] = useState('');
+      const [perfilFotoPreview, setPerfilFotoPreview] = useState('');
+      const [uploadingFotoPerfil, setUploadingFotoPerfil] = useState(false);
+      const [salvandoPerfil, setSalvandoPerfil] = useState(false);
+
+      // Estados para Edição de Qualquer Usuário pelo Administrador
+      const [usuarioEmEdicaoAdmin, setUsuarioEmEdicaoAdmin] = useState(null);
+      const [adminEditNome, setAdminEditNome] = useState('');
+      const [adminEditEmail, setAdminEditEmail] = useState('');
+      const [adminEditCpf, setAdminEditCpf] = useState('');
+      const [adminEditRole, setAdminEditRole] = useState('cliente');
+      const [adminEditSenha, setAdminEditSenha] = useState('');
+      const [adminEditFotoUrl, setAdminEditFotoUrl] = useState('');
+      const [adminEditFotoPreview, setAdminEditFotoPreview] = useState('');
+      const [adminEditCpfAlterado, setAdminEditCpfAlterado] = useState(false);
+      const [uploadingFotoAdminEdit, setUploadingFotoAdminEdit] = useState(false);
+      const [salvandoEdicaoAdminUsuario, setSalvandoEdicaoAdminUsuario] = useState(false);
 
       // Estados para Cadastro Simplificado de Peças (Seletores Intuitivos sem JSON manual)
       const [categoriaNovoProduto, setCategoriaNovoProduto] = useState('Moda');
@@ -1245,6 +1271,115 @@ function getFrontendHtml() {
           alert('Erro na conexão ao salvar edição.');
         } finally {
           setSalvandoEdicao(false);
+        }
+      };
+
+      const iniciarEdicaoPerfilUsuario = () => {
+        if (!usuario) return;
+        setPerfilNome(usuario.nome || usuario.nome_completo || '');
+        setPerfilEmail(usuario.email || '');
+        setPerfilCpf(usuario.cpf ? formatarCpf(usuario.cpf) : '');
+        setPerfilNovaSenha('');
+        setPerfilFotoUrl(usuario.foto_perfil || '');
+        setPerfilFotoPreview(usuario.foto_perfil || '');
+        setVerSenhaPerfil(false);
+        setModalPerfilUsuario(true);
+      };
+
+      const salvarPerfilUsuario = async (e) => {
+        e.preventDefault();
+        if (!token) return;
+        setSalvandoPerfil(true);
+        try {
+          const res = await fetch('/api/usuario/perfil', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              nome_completo: perfilNome,
+              email: perfilEmail,
+              cpf: perfilCpf,
+              senha: perfilNovaSenha,
+              foto_perfil: perfilFotoUrl
+            })
+          });
+          const json = await res.json();
+          if (res.ok) {
+            mostrarNotificacao(json.mensagem || 'Perfil atualizado com sucesso!');
+            if (json.usuario) {
+              setUsuario(json.usuario);
+              localStorage.setItem('venus_usuario', JSON.stringify(json.usuario));
+            }
+            if (json.token) {
+              setToken(json.token);
+              localStorage.setItem('venus_token', json.token);
+            }
+            setModalPerfilUsuario(false);
+          } else {
+            alert(json.erro || 'Falha ao atualizar perfil.');
+          }
+        } catch (err) {
+          alert('Erro de conexão ao salvar perfil.');
+        } finally {
+          setSalvandoPerfil(false);
+        }
+      };
+
+      const iniciarEdicaoUsuarioAdmin = (u) => {
+        if (!u) return;
+        setUsuarioEmEdicaoAdmin(u);
+        setAdminEditNome(u.nome_completo || u.nome || '');
+        setAdminEditEmail(u.email || '');
+        setAdminEditCpf(u.cpf ? formatarCpf(u.cpf) : '');
+        setAdminEditRole(u.role || 'cliente');
+        setAdminEditSenha('');
+        setAdminEditFotoUrl(u.foto_perfil || '');
+        setAdminEditFotoPreview(u.foto_perfil || '');
+        setAdminEditCpfAlterado(!!u.cpf_alterado);
+        setVerSenhaAdminEditUser(false);
+      };
+
+      const salvarEdicaoUsuarioAdmin = async (e) => {
+        e.preventDefault();
+        if (!token || !usuarioEmEdicaoAdmin) return;
+        setSalvandoEdicaoAdminUsuario(true);
+        try {
+          const res = await fetch('/api/admin/usuarios', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              id_usuario: usuarioEmEdicaoAdmin.id_usuario,
+              nome_completo: adminEditNome,
+              email: adminEditEmail,
+              cpf: adminEditCpf,
+              role: adminEditRole,
+              foto_perfil: adminEditFotoUrl,
+              cpf_alterado: adminEditCpfAlterado,
+              senha: adminEditSenha
+            })
+          });
+          const json = await res.json();
+          if (res.ok) {
+            mostrarNotificacao(json.mensagem || 'Usuário atualizado com sucesso pela administração!');
+            setUsuarioEmEdicaoAdmin(null);
+            carregarUsuarios();
+            if (usuario && usuario.id_usuario === usuarioEmEdicaoAdmin.id_usuario && json.usuario) {
+              const usuarioSinc = { ...usuario, ...json.usuario };
+              setUsuario(usuarioSinc);
+              localStorage.setItem('venus_usuario', JSON.stringify(usuarioSinc));
+            }
+          } else {
+            alert(json.erro || 'Falha ao atualizar dados do usuário.');
+          }
+        } catch (err) {
+          alert('Erro de conexão ao salvar usuário.');
+        } finally {
+          setSalvandoEdicaoAdminUsuario(false);
         }
       };
 
@@ -1892,20 +2027,37 @@ function getFrontendHtml() {
 
                   {usuario ? (
                     <div className="flex items-center gap-1.5 pl-1.5 border-l border-ouro/25">
-                      <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full bg-celestial-950 border border-ouro/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <button
+                        id="btn-meu-perfil-header"
+                        type="button"
+                        onClick={iniciarEdicaoPerfilUsuario}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-celestial-950 border border-ouro/40 hover:border-ouro hover:bg-ouro/10 transition-all cursor-pointer group shadow-sm"
+                        title="Configurações do Meu Perfil"
+                      >
+                        {usuario.foto_perfil ? (
+                          <img 
+                            src={usuario.foto_perfil} 
+                            alt={usuario.nome || 'Avatar'} 
+                            className="w-5 h-5 rounded-full object-cover border border-ouro shadow-xs flex-shrink-0" 
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-ouro-dark to-ouro text-celestial-950 font-serif font-bold text-[10px] flex items-center justify-center shadow-xs flex-shrink-0">
+                            {((usuario.nome || usuario.email || 'U')[0]).toUpperCase()}
+                          </div>
+                        )}
                         <span className="text-[10px] uppercase tracking-wider font-bold text-ouro">
                           {usuario.role === 'admin' ? 'Admin' : (usuario.role === 'doador' ? 'Doador' : 'Cliente')}
                         </span>
                         {usuario.nome && usuario.nome.toLowerCase() !== 'administradora' && usuario.nome.toLowerCase() !== 'admin' && (
-                          <span className="text-[10.5px] text-luar-100 font-serif font-medium pl-1 max-w-[80px] truncate">
+                          <span className="text-[10.5px] text-luar-100 font-serif font-medium pl-0.5 max-w-[80px] truncate hidden md:inline">
                             {usuario.nome.split(' ')[0]}
                           </span>
                         )}
-                      </div>
+                        <span className="text-[9px] text-ouro/70 group-hover:text-ouro ml-0.5">⚙️</span>
+                      </button>
                       <button
                         onClick={handleDeslogar}
-                        className="text-[10px] uppercase tracking-wider text-stone-400 hover:text-rose-400 px-2.5 py-1 rounded-full border border-stone-700/50 hover:border-rose-500/50 transition-all cursor-pointer whitespace-nowrap"
+                        className="text-[10px] uppercase tracking-wider text-stone-400 hover:text-rose-400 px-2 py-1 rounded-full border border-stone-700/50 hover:border-rose-500/50 transition-all cursor-pointer whitespace-nowrap"
                         title="Encerrar sessão"
                       >
                         Sair
@@ -3262,6 +3414,462 @@ function getFrontendHtml() {
                       className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <span>{salvandoEdicao ? 'Salvando Alterações...' : 'Salvar Alterações'}</span>
+                      <span>✦</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL CONFIGURAÇÕES DO MEU PERFIL (AUTOATENDIMENTO DO USUÁRIO) */}
+          {/* ==================================================================== */}
+          {modalPerfilUsuario && usuario && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="relative w-full max-w-lg bg-celestial-900 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl border-2 border-ouro/50 gold-glow max-h-[92vh] overflow-y-auto">
+                <button 
+                  type="button"
+                  onClick={() => setModalPerfilUsuario(false)} 
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-celestial-950 border border-ouro/40 hover:border-ouro text-ouro hover:text-white flex items-center justify-center text-lg font-bold transition-all cursor-pointer z-10"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                <div className="border-b border-ouro/20 pb-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-ouro/15 border border-ouro/40 flex items-center justify-center text-ouro text-lg">
+                    👤
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-ouro tracking-wider block">
+                      Minha Conta Vênus e Luar
+                    </span>
+                    <h3 className="font-serif text-xl sm:text-2xl font-bold gold-gradient-text">
+                      Configurações do Meu Perfil
+                    </h3>
+                  </div>
+                </div>
+
+                <form onSubmit={salvarPerfilUsuario} className="space-y-4">
+                  {/* Foto de Perfil */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/30 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="relative">
+                      {perfilFotoPreview ? (
+                        <img 
+                          src={perfilFotoPreview} 
+                          alt="Pré-visualização" 
+                          className="w-20 h-20 rounded-full object-cover border-2 border-ouro shadow-md" 
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-ouro-dark to-ouro text-celestial-950 font-serif font-bold text-2xl flex items-center justify-center border-2 border-ouro shadow-md">
+                          {((perfilNome || usuario.email || 'U')[0]).toUpperCase()}
+                        </div>
+                      )}
+                      {perfilFotoPreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPerfilFotoUrl('');
+                            setPerfilFotoPreview('');
+                          }}
+                          className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold flex items-center justify-center hover:bg-rose-500 shadow cursor-pointer"
+                          title="Remover foto de perfil"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2 text-center sm:text-left w-full">
+                      <span className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                        Foto de Perfil
+                      </span>
+                      <div className="flex flex-col gap-2">
+                        <label className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-celestial-900 border border-ouro/40 text-ouro hover:bg-ouro hover:text-celestial-950 text-xs font-bold cursor-pointer transition-all shadow-sm">
+                          <span>📷</span>
+                          <span>{uploadingFotoPerfil ? 'Processando foto...' : 'Escolher Foto do PC ou Celular'}</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            disabled={uploadingFotoPerfil}
+                            onChange={(e) => {
+                              const arq = e.target.files && e.target.files[0];
+                              if (!arq) return;
+                              setUploadingFotoPerfil(true);
+                              processarUploadImagem(
+                                arq,
+                                (url) => {
+                                  setUploadingFotoPerfil(false);
+                                  setPerfilFotoUrl(url);
+                                  setPerfilFotoPreview(url);
+                                  mostrarNotificacao('Foto carregada com sucesso!', 'sucesso');
+                                },
+                                (err) => {
+                                  setUploadingFotoPerfil(false);
+                                  alert('Erro ao carregar foto: ' + err);
+                                }
+                              );
+                            }}
+                          />
+                        </label>
+                        <input 
+                          type="text"
+                          value={perfilFotoUrl}
+                          onChange={(e) => {
+                            setPerfilFotoUrl(e.target.value);
+                            setPerfilFotoPreview(e.target.value);
+                          }}
+                          placeholder="Ou cole a URL direta da imagem (https://...)" 
+                          className="w-full p-2 rounded-xl bg-celestial-900 border border-ouro/25 text-xs text-luar-100 outline-none focus:border-ouro" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Nome Completo */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      Nome Completo
+                    </label>
+                    <input 
+                      id="input-perfil-nome"
+                      name="perfil_nome" 
+                      value={perfilNome} 
+                      onChange={(e) => setPerfilNome(e.target.value)} 
+                      required 
+                      placeholder="Ex: Clara Silveira" 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                    />
+                  </div>
+
+                  {/* E-mail */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      Endereço de E-mail
+                    </label>
+                    <input 
+                      id="input-perfil-email"
+                      name="perfil_email" 
+                      type="email"
+                      value={perfilEmail} 
+                      onChange={(e) => setPerfilEmail(e.target.value)} 
+                      required 
+                      placeholder="seu@email.com" 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                    />
+                  </div>
+
+                  {/* CPF com Trava de 1 Alteração */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                        CPF Oficial
+                      </label>
+                      {usuario.cpf_alterado ? (
+                        <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                          <span>🔒</span>
+                          <span>Bloqueado (1 alteração já realizada)</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-ouro/80 font-medium">
+                          ✦ Permite 1 alteração
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      id="input-perfil-cpf"
+                      name="perfil_cpf" 
+                      value={perfilCpf} 
+                      onChange={(e) => {
+                        if (!usuario.cpf_alterado) {
+                          setPerfilCpf(formatarCpf(e.target.value));
+                        }
+                      }}
+                      disabled={!!usuario.cpf_alterado}
+                      maxLength="14"
+                      placeholder="000.000.000-00" 
+                      className={"w-full p-3 rounded-xl text-xs font-mono outline-none " + (
+                        usuario.cpf_alterado 
+                          ? 'bg-celestial-950/60 border border-stone-700/60 text-stone-400 cursor-not-allowed'
+                          : 'bg-celestial-950 border border-ouro/30 text-luar-100 focus:border-ouro'
+                      )} 
+                    />
+                    {usuario.cpf_alterado ? (
+                      <p className="text-[10.5px] text-stone-400 mt-1">
+                        Por motivos de segurança e integridade cadastral, o CPF foi bloqueado após a primeira retificação. Para alterações adicionais, solicite suporte à administração.
+                      </p>
+                    ) : (
+                      <p className="text-[10.5px] text-ouro/70 mt-1">
+                        Atenção: Você pode alterar seu CPF apenas 1 vez pelo autoatendimento.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Senha */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/30 space-y-2">
+                    <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                      Alterar Senha de Acesso (Opcional)
+                    </label>
+                    <p className="text-[10.5px] text-luar-300">
+                      Deixe em branco caso deseje manter sua senha atual inalterada.
+                    </p>
+                    <div className="relative">
+                      <input 
+                        id="input-perfil-senha"
+                        name="perfil_nova_senha" 
+                        type={verSenhaPerfil ? "text" : "password"} 
+                        value={perfilNovaSenha} 
+                        onChange={(e) => setPerfilNovaSenha(e.target.value)} 
+                        placeholder="Nova senha (mínimo 8 caracteres)" 
+                        className="w-full p-3 pr-10 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                      />
+                      {renderBotaoOlhoSenha(verSenhaPerfil, () => setVerSenhaPerfil(!verSenhaPerfil), "btn-ver-senha-perfil")}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setModalPerfilUsuario(false)}
+                      className="flex-1 py-3.5 rounded-xl bg-celestial-950 border border-ouro/30 text-luar-300 hover:text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={salvandoPerfil}
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <span>{salvandoPerfil ? 'Salvando...' : 'Salvar Alterações'}</span>
+                      <span>✦</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL ADMIN: EDIÇÃO DE QUALQUER USUÁRIO (GESTOR) */}
+          {/* ==================================================================== */}
+          {usuarioEmEdicaoAdmin && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-sm animate-fadeIn">
+              <div className="relative w-full max-w-xl bg-celestial-900 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl border-2 border-ouro/60 gold-glow max-h-[92vh] overflow-y-auto">
+                <button 
+                  type="button"
+                  onClick={() => setUsuarioEmEdicaoAdmin(null)} 
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-celestial-950 border border-ouro/40 hover:border-ouro text-ouro hover:text-white flex items-center justify-center text-lg font-bold transition-all cursor-pointer z-10"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                <div className="border-b border-ouro/20 pb-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-ouro/20 border border-ouro/40 flex items-center justify-center text-ouro text-lg">
+                    ✏️
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-ouro tracking-wider block">
+                      Administração de Acessos &amp; Cadastros
+                    </span>
+                    <h3 className="font-serif text-xl sm:text-2xl font-bold gold-gradient-text">
+                      Editar Usuário: {adminEditNome || usuarioEmEdicaoAdmin.email}
+                    </h3>
+                  </div>
+                </div>
+
+                <form onSubmit={salvarEdicaoUsuarioAdmin} className="space-y-4">
+                  {/* Foto de Perfil */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/30 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="relative">
+                      {adminEditFotoPreview ? (
+                        <img 
+                          src={adminEditFotoPreview} 
+                          alt="Foto" 
+                          className="w-16 h-16 rounded-full object-cover border-2 border-ouro shadow-md" 
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-ouro/15 text-ouro font-serif font-bold text-xl flex items-center justify-center border-2 border-ouro/40">
+                          {((adminEditNome || usuarioEmEdicaoAdmin.email || 'U')[0]).toUpperCase()}
+                        </div>
+                      )}
+                      {adminEditFotoPreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminEditFotoUrl('');
+                            setAdminEditFotoPreview('');
+                          }}
+                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center hover:bg-rose-500 shadow cursor-pointer"
+                          title="Remover foto"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5 text-center sm:text-left w-full">
+                      <span className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                        Foto de Perfil do Usuário
+                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl bg-celestial-900 border border-ouro/40 text-ouro hover:bg-ouro hover:text-celestial-950 text-xs font-bold cursor-pointer transition-all shadow-sm">
+                          <span>📷</span>
+                          <span>{uploadingFotoAdminEdit ? 'Processando foto...' : 'Escolher Foto do Computador ou Celular'}</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            disabled={uploadingFotoAdminEdit}
+                            onChange={(e) => {
+                              const arq = e.target.files && e.target.files[0];
+                              if (!arq) return;
+                              setUploadingFotoAdminEdit(true);
+                              processarUploadImagem(
+                                arq,
+                                (url) => {
+                                  setUploadingFotoAdminEdit(false);
+                                  setAdminEditFotoUrl(url);
+                                  setAdminEditFotoPreview(url);
+                                  mostrarNotificacao('Foto carregada com sucesso!', 'sucesso');
+                                },
+                                (err) => {
+                                  setUploadingFotoAdminEdit(false);
+                                  alert('Erro ao carregar foto: ' + err);
+                                }
+                              );
+                            }}
+                          />
+                        </label>
+                        <input 
+                          type="text"
+                          value={adminEditFotoUrl}
+                          onChange={(e) => {
+                            setAdminEditFotoUrl(e.target.value);
+                            setAdminEditFotoPreview(e.target.value);
+                          }}
+                          placeholder="Ou cole a URL direta (https://...)" 
+                          className="w-full p-2 rounded-xl bg-celestial-900 border border-ouro/25 text-xs text-luar-100 outline-none focus:border-ouro" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Nome Completo */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      Nome Completo
+                    </label>
+                    <input 
+                      name="admin_edit_nome" 
+                      value={adminEditNome} 
+                      onChange={(e) => setAdminEditNome(e.target.value)} 
+                      required 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                    />
+                  </div>
+
+                  {/* E-mail */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      E-mail de Cadastro
+                    </label>
+                    <input 
+                      name="admin_edit_email" 
+                      type="email"
+                      value={adminEditEmail} 
+                      onChange={(e) => setAdminEditEmail(e.target.value)} 
+                      required 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                    />
+                  </div>
+
+                  {/* CPF & Função */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                        CPF (Correção Administrativa)
+                      </label>
+                      <input 
+                        name="admin_edit_cpf" 
+                        value={adminEditCpf} 
+                        onChange={(e) => setAdminEditCpf(formatarCpf(e.target.value))} 
+                        maxLength="14"
+                        placeholder="000.000.000-00" 
+                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                        Função / Papel no Sistema
+                      </label>
+                      <select 
+                        name="admin_edit_role"
+                        value={adminEditRole}
+                        onChange={(e) => setAdminEditRole(e.target.value)}
+                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro cursor-pointer"
+                      >
+                        <option value="cliente">Cliente (Consumidor)</option>
+                        <option value="doador">Doador de Pets</option>
+                        <option value="admin">Administradora</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Trava de Alteração de CPF */}
+                  <div className="p-3 rounded-xl bg-celestial-950/90 border border-ouro/30 flex items-center justify-between">
+                    <div>
+                      <span className="block text-xs font-bold text-ouro">Trava de Alteração de CPF do Usuário</span>
+                      <span className="block text-[10.5px] text-luar-300">
+                        {adminEditCpfAlterado ? 'O usuário já atingiu o limite de 1 alteração.' : 'O usuário ainda tem direito a 1 alteração.'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdminEditCpfAlterado(!adminEditCpfAlterado)}
+                      className={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer " + (adminEditCpfAlterado ? 'bg-amber-950/80 border border-amber-500 text-amber-300' : 'bg-emerald-950/80 border border-emerald-500 text-emerald-300')}
+                    >
+                      {adminEditCpfAlterado ? '🔒 Travado (1 usada)' : '🔓 Liberado para 1x'}
+                    </button>
+                  </div>
+
+                  {/* Redefinição de Senha */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/30 space-y-2">
+                    <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                      Redefinir Senha do Usuário (Opcional)
+                    </label>
+                    <p className="text-[10.5px] text-luar-300">
+                      Deixe em branco para preservar a senha atual do usuário.
+                    </p>
+                    <div className="relative">
+                      <input 
+                        name="admin_edit_senha" 
+                        type={verSenhaAdminEditUser ? "text" : "password"} 
+                        value={adminEditSenha} 
+                        onChange={(e) => setAdminEditSenha(e.target.value)} 
+                        placeholder="Nova senha para este usuário" 
+                        className="w-full p-3 pr-10 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                      />
+                      {renderBotaoOlhoSenha(verSenhaAdminEditUser, () => setVerSenhaAdminEditUser(!verSenhaAdminEditUser), "btn-ver-senha-admin-user")}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setUsuarioEmEdicaoAdmin(null)}
+                      className="flex-1 py-3.5 rounded-xl bg-celestial-950 border border-ouro/30 text-luar-300 hover:text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={salvandoEdicaoAdminUsuario}
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <span>{salvandoEdicaoAdminUsuario ? 'Gravando...' : 'Gravar Alterações'}</span>
                       <span>✦</span>
                     </button>
                   </div>
@@ -5790,25 +6398,58 @@ function getFrontendHtml() {
                         <div className="text-center p-6 text-xs text-luar-300">Carregando usuários registrados...</div>
                       ) : (
                         listaUsuarios.map(u => (
-                          <div key={u.id_usuario} className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-ouro-light">{u.nome_completo}</span>
-                                <span className={"text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full " + (u.role === 'admin' ? 'bg-ouro/20 text-ouro border border-ouro/40' : u.role === 'doador' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40' : 'bg-celestial-900 text-luar-300 border border-ouro/20')}>
-                                  {u.role === 'admin' ? 'Administradora' : (u.role === 'doador' ? '🐾 Doador de Pets' : 'Cliente')}
-                                </span>
-                                {u.cpf && (
-                                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40 shadow-sm">
-                                    CPF: {u.cpf}
+                          <div key={u.id_usuario} className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-ouro/50 transition-all">
+                            <div className="flex items-center gap-3">
+                              {u.foto_perfil ? (
+                                <img 
+                                  src={u.foto_perfil} 
+                                  alt={u.nome_completo || 'Avatar'} 
+                                  className="w-11 h-11 rounded-full object-cover border border-ouro/40 shadow-sm shrink-0" 
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-celestial-900 via-stone-800 to-ouro/20 border border-ouro/30 flex items-center justify-center font-serif text-sm font-bold text-ouro shrink-0 shadow-sm">
+                                  {(u.nome_completo || u.email || 'U').charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-xs font-bold text-ouro-light">{u.nome_completo}</span>
+                                  <span className={"text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full " + (u.role === 'admin' ? 'bg-ouro/20 text-ouro border border-ouro/40' : u.role === 'doador' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40' : 'bg-celestial-900 text-luar-300 border border-ouro/20')}>
+                                    {u.role === 'admin' ? 'Administradora' : (u.role === 'doador' ? '🐾 Doador de Pets' : 'Cliente')}
                                   </span>
-                                )}
+                                  {u.cpf && (
+                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40 shadow-sm">
+                                      CPF: {u.cpf}
+                                    </span>
+                                  )}
+                                  {u.cpf_alterado ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm" title="CPF já foi alterado pelo usuário (travado para autoatendimento)">
+                                      🔒 CPF Travado (1x)
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm" title="CPF liberado para edição pelo usuário">
+                                      🔓 CPF Livre (1x)
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-luar-300/80 block mt-0.5">{u.email}</span>
                               </div>
-                              <span className="text-[11px] text-luar-300/80 block mt-0.5">{u.email}</span>
                             </div>
 
-                            <div className="text-left sm:text-right text-[10px] text-stone-400">
-                              <div>Cadastro: <strong className="text-luar-200">{new Date(u.criado_em).toLocaleDateString('pt-BR')}</strong></div>
-                              <div>Último Acesso: <strong className="text-emerald-400">{u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'}</strong></div>
+                            <div className="flex flex-row sm:flex-col items-end justify-between sm:justify-center gap-2">
+                              <div className="text-left sm:text-right text-[10px] text-stone-400">
+                                <div>Cadastro: <strong className="text-luar-200">{new Date(u.criado_em).toLocaleDateString('pt-BR')}</strong></div>
+                                <div>Último Acesso: <strong className="text-emerald-400">{u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'}</strong></div>
+                              </div>
+                              <button
+                                type="button"
+                                id={"btn-editar-usuario-" + u.id_usuario}
+                                onClick={() => iniciarEdicaoUsuarioAdmin(u)}
+                                className="px-3 py-1.5 rounded-xl bg-ouro/15 hover:bg-ouro/30 text-ouro border border-ouro/40 hover:border-ouro text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shrink-0"
+                              >
+                                <span>✏️</span>
+                                <span>Editar</span>
+                              </button>
                             </div>
                           </div>
                         ))
@@ -7222,12 +7863,259 @@ const server = http.createServer((req, res) => {
       email: u.email,
       cpf: u.cpf || null,
       role: u.role,
+      foto_perfil: u.foto_perfil || null,
+      cpf_alterado: !!u.cpf_alterado,
       criado_em: u.criado_em,
       ultimo_acesso: u.ultimo_acesso || u.criado_em
     }));
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(listaHigienizada));
+    return;
+  }
+
+  // PUT /api/usuario/perfil (AUTOATENDIMENTO: O PRÓPRIO USUÁRIO EDITA SUAS CONFIGURAÇÕES)
+  if (pathname === '/api/usuario/perfil' && req.method === 'PUT') {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const payload = token ? verificarJwt(token) : null;
+
+    if (!payload || !payload.id_usuario) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ erro: 'Não autenticado. Faça login para acessar suas configurações.' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { nome_completo, email, cpf, senha, foto_perfil } = JSON.parse(body);
+        const user = usuarios.find(u => u.id_usuario === payload.id_usuario);
+        if (!user) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Usuário não encontrado.' }));
+          return;
+        }
+
+        // 1. Nome Completo
+        if (nome_completo && typeof nome_completo === 'string' && nome_completo.trim().length >= 2) {
+          user.nome_completo = nome_completo.trim();
+        }
+
+        // 2. E-mail
+        if (email && typeof email === 'string') {
+          const emailNorm = email.trim().toLowerCase();
+          if (emailNorm !== user.email.toLowerCase()) {
+            if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.email.toLowerCase() === emailNorm)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este endereço de e-mail já está sendo utilizado por outro cadastro.' }));
+              return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Formato de e-mail inválido.' }));
+              return;
+            }
+            user.email = emailNorm;
+          }
+        }
+
+        // 3. Foto de Perfil
+        if (foto_perfil !== undefined) {
+          user.foto_perfil = foto_perfil || null;
+        }
+
+        // 4. CPF (REGRA: O PRÓPRIO USUÁRIO PODE ALTERAR O CPF APENAS 1 VEZ)
+        if (cpf !== undefined && cpf !== null && typeof cpf === 'string') {
+          const cpfLimpo = cpf.replace(/\D/g, '');
+          const cpfAtualLimpo = (user.cpf || '').replace(/\D/g, '');
+          
+          if (cpfLimpo && cpfLimpo !== cpfAtualLimpo) {
+            // Se o usuário já alterou o CPF anteriormente, bloqueia
+            if (user.cpf_alterado) {
+              res.writeHead(403, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                erro: 'O CPF só pode ser alterado uma única vez pelo próprio usuário. Para novas retificações, contate o administrador da boutique.' 
+              }));
+              return;
+            }
+
+            if (!validarCpf(cpfLimpo)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'CPF inválido ou fictício. O CPF deve atender ao Módulo 11 da Receita Federal.' }));
+              return;
+            }
+
+            // Verifica unicidade
+            if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este CPF já está cadastrado em outra conta.' }));
+              return;
+            }
+
+            user.cpf = formatarCpf(cpfLimpo);
+            user.cpf_alterado = true;
+          }
+        }
+
+        // 5. Senha (Opcional)
+        if (senha && typeof senha === 'string' && senha.trim().length > 0) {
+          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email);
+          if (!checagemSenha.valida) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ erro: checagemSenha.motivo }));
+            return;
+          }
+          user.senha_hash = gerarHashScrypt(senha);
+        }
+
+        salvarUsuariosNoDisco();
+
+        // Novo token atualizado
+        const novoToken = gerarJwt({ id_usuario: user.id_usuario, role: user.role });
+        const usuarioRetorno = {
+          id_usuario: user.id_usuario,
+          nome: user.nome_completo,
+          email: user.email,
+          cpf: user.cpf || null,
+          role: user.role,
+          foto_perfil: user.foto_perfil || null,
+          cpf_alterado: !!user.cpf_alterado
+        };
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          mensagem: 'Configurações de perfil atualizadas com sucesso!',
+          token: novoToken,
+          usuario: usuarioRetorno
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao atualizar perfil do usuário.' }));
+      }
+    });
+    return;
+  }
+
+  // PUT /api/admin/usuarios (ADMINISTRADOR EDITA OS DADOS DE QUALQUER USUÁRIO)
+  if (pathname === '/api/admin/usuarios' && req.method === 'PUT') {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const payload = token ? verificarJwt(token) : null;
+
+    if (!payload || payload.role !== 'admin') {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ erro: 'Acesso negado. Apenas administradores podem gerenciar cadastros de usuários.' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id_usuario, nome_completo, email, cpf, role, foto_perfil, cpf_alterado, senha } = JSON.parse(body);
+        if (!id_usuario) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'ID do usuário é obrigatório.' }));
+          return;
+        }
+
+        const user = usuarios.find(u => u.id_usuario === id_usuario);
+        if (!user) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Usuário não localizado no sistema.' }));
+          return;
+        }
+
+        // Nome
+        if (nome_completo && typeof nome_completo === 'string' && nome_completo.trim().length >= 2) {
+          user.nome_completo = nome_completo.trim();
+        }
+
+        // E-mail
+        if (email && typeof email === 'string') {
+          const emailNorm = email.trim().toLowerCase();
+          if (emailNorm !== user.email.toLowerCase()) {
+            if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.email.toLowerCase() === emailNorm)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este e-mail já pertence a outro usuário.' }));
+              return;
+            }
+            user.email = emailNorm;
+          }
+        }
+
+        // CPF (Admin tem poder irrestrito de retificar/ajustar CPF)
+        if (cpf !== undefined && cpf !== null) {
+          const cpfLimpo = String(cpf).replace(/\D/g, '');
+          if (cpfLimpo.length > 0) {
+            if (!validarCpf(cpfLimpo)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'CPF inválido pelo Módulo 11 da Receita Federal.' }));
+              return;
+            }
+            if (usuarios.some(u => u.id_usuario !== user.id_usuario && u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este CPF já está cadastrado em outra conta.' }));
+              return;
+            }
+            user.cpf = formatarCpf(cpfLimpo);
+          } else {
+            user.cpf = null;
+          }
+        }
+
+        // Role / Função
+        if (role && ['cliente', 'doador', 'admin'].includes(role)) {
+          user.role = role;
+        }
+
+        // Foto de Perfil
+        if (foto_perfil !== undefined) {
+          user.foto_perfil = foto_perfil || null;
+        }
+
+        // Trava de CPF (Admin pode resetar para permitir que o usuário altere novamente ou travar)
+        if (cpf_alterado !== undefined) {
+          user.cpf_alterado = !!cpf_alterado;
+        }
+
+        // Redefinição de Senha pelo Admin (Opcional)
+        if (senha && typeof senha === 'string' && senha.trim().length > 0) {
+          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email);
+          if (!checagemSenha.valida) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ erro: checagemSenha.motivo }));
+            return;
+          }
+          user.senha_hash = gerarHashScrypt(senha);
+        }
+
+        salvarUsuariosNoDisco();
+
+        const usuarioRetorno = {
+          id_usuario: user.id_usuario,
+          nome_completo: user.nome_completo,
+          email: user.email,
+          cpf: user.cpf || null,
+          role: user.role,
+          foto_perfil: user.foto_perfil || null,
+          cpf_alterado: !!user.cpf_alterado,
+          criado_em: user.criado_em,
+          ultimo_acesso: user.ultimo_acesso
+        };
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          mensagem: 'Dados do usuário atualizados com sucesso pela administração!',
+          usuario: usuarioRetorno
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao processar edição de usuário.' }));
+      }
+    });
     return;
   }
 
@@ -7875,7 +8763,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             nome: novoUsuario.nome_completo,
             email: novoUsuario.email,
             cpf: novoUsuario.cpf,
-            role: novoUsuario.role
+            role: novoUsuario.role,
+            foto_perfil: null,
+            cpf_alterado: false
           }
         }));
       } catch (err) {
@@ -7957,7 +8847,10 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             id_usuario: user.id_usuario,
             nome: user.nome_completo,
             email: user.email,
-            role: user.role
+            cpf: user.cpf || null,
+            role: user.role,
+            foto_perfil: user.foto_perfil || null,
+            cpf_alterado: !!user.cpf_alterado
           }
         }));
       } catch (err) {

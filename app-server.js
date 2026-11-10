@@ -69,11 +69,11 @@ function validarCpf(cpf) {
 }
 
 function formatarCpf(cpf) {
-  const limpo = (cpf || '').replace(/\D/g, '').slice(0, 11);
-  return limpo
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  const d = (cpf || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
+  if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+  return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
 }
 
 function validarRegrasSenha(senha, nome = '', email = '') {
@@ -1003,6 +1003,7 @@ function getFrontendHtml() {
       const [relatorioFaturamento, setRelatorioFaturamento] = useState(null);
       const [subAbaPetsAdmin, setSubAbaPetsAdmin] = useState('lista'); // 'lista' | 'novo' | 'candidaturas'
       const [modalRegistroAdocao, setModalRegistroAdocao] = useState(null);
+      const [registroAdocaoCpf, setRegistroAdocaoCpf] = useState('');
       const [modalEditarPet, setModalEditarPet] = useState(null);
 
       // Estados para FIV e FeLV nos casos de felinos (gatos)
@@ -1073,6 +1074,179 @@ function getFrontendHtml() {
       // JSON Manual opcional (Modo Avançado)
       const [atributosManualJson, setAtributosManualJson] = useState(JSON.stringify({ tamanho: "M", tecido: "seda pura acetinada", cor: "Azul Noturno com Brilho Dourado", corte: "Evasê Fluído" }, null, 2));
       const [verAtributosTecnico, setVerAtributosTecnico] = useState(false);
+
+      // Estados para Edição de Peça Existente (Moda, Pet Shop e Cafeteria)
+      const [produtoEmEdicao, setProdutoEmEdicao] = useState(null);
+      const [editNome, setEditNome] = useState('');
+      const [editCategoria, setEditCategoria] = useState('Moda');
+      const [editPreco, setEditPreco] = useState('');
+      const [editEstoque, setEditEstoque] = useState(10);
+      const [editDescricao, setEditDescricao] = useState('');
+      const [editImagemUrl, setEditImagemUrl] = useState('');
+      const [editImagemPreview, setEditImagemPreview] = useState('');
+      const [uploadingFotoEdit, setUploadingFotoEdit] = useState(false);
+      const [editModoAtributosAvancado, setEditModoAtributosAvancado] = useState(false);
+      const [editAtributosManualJson, setEditAtributosManualJson] = useState('{}');
+      const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+      // Atributos de Edição: Moda
+      const [editTamanhoModa, setEditTamanhoModa] = useState('M');
+      const [editGradesModa, setEditGradesModa] = useState(['PP', 'P', 'M', 'G']);
+      const [editCorModa, setEditCorModa] = useState('');
+      const [editTecidoModa, setEditTecidoModa] = useState('Seda pura acetinada');
+      const [editCorteModa, setEditCorteModa] = useState('Evasê Fluído');
+      const [editEstacaoModa, setEditEstacaoModa] = useState('Noite / Alta Costura');
+
+      // Atributos de Edição: Pet
+      const [editPortePet, setEditPortePet] = useState('Médio');
+      const [editIndicacaoPet, setEditIndicacaoPet] = useState('Cães e Gatos');
+      const [editMaterialPet, setEditMaterialPet] = useState('Veludo plush e espuma ortopédica');
+      const [editLavavelPet, setEditLavavelPet] = useState(true);
+      const [editAntialergicoPet, setEditAntialergicoPet] = useState(true);
+
+      // Atributos de Edição: Cafeteria
+      const [editVolumeCafeteria, setEditVolumeCafeteria] = useState('240ml (Caneca)');
+      const [editTemperaturaCafeteria, setEditTemperaturaCafeteria] = useState('Quente');
+      const [editGraoCafeteria, setEditGraoCafeteria] = useState('Catuaí Vermelho Artesanal 88 pts');
+      const [editOpcoesLeiteCafeteria, setEditOpcoesLeiteCafeteria] = useState(['Integral Fresco', 'Aveia Barista']);
+      const [editVeganoCafeteria, setEditVeganoCafeteria] = useState(false);
+      const [editVegetarianoCafeteria, setEditVegetarianoCafeteria] = useState(true);
+      const [editSemGlutenCafeteria, setEditSemGlutenCafeteria] = useState(false);
+
+      const iniciarEdicaoProduto = (prod) => {
+        if (!prod) return;
+        setProdutoEmEdicao(prod);
+        setEditNome(prod.nome_item || '');
+        setEditCategoria(prod.categoria || 'Moda');
+        setEditPreco(prod.preco !== undefined ? String(prod.preco) : '');
+        setEditEstoque(prod.estoque !== undefined ? prod.estoque : 10);
+        setEditDescricao(prod.descricao || '');
+        setEditImagemUrl(prod.imagem_url || '');
+        setEditImagemPreview(prod.imagem_url || '');
+        setEditModoAtributosAvancado(false);
+
+        const at = prod.atributos || {};
+        setEditAtributosManualJson(JSON.stringify(at, null, 2));
+
+        // Pré-preenchimento Moda
+        setEditTamanhoModa(at.tamanho || 'M');
+        if (at.grade_disponivel && typeof at.grade_disponivel === 'string') {
+          setEditGradesModa(at.grade_disponivel.split(',').map(s => s.trim()).filter(Boolean));
+        } else if (Array.isArray(at.grades_disponiveis)) {
+          setEditGradesModa(at.grades_disponiveis);
+        } else {
+          setEditGradesModa(['PP', 'P', 'M', 'G']);
+        }
+        setEditCorModa(at.cor || '');
+        setEditTecidoModa(at.tecido || 'Seda pura acetinada');
+        setEditCorteModa(at.corte || 'Evasê Fluído');
+        setEditEstacaoModa(at.ocasiao || at.estacao || 'Noite / Alta Costura');
+
+        // Pré-preenchimento Pet
+        setEditIndicacaoPet(at.indicacao || 'Cães e Gatos');
+        setEditPortePet(at.porte || at.tamanho_pet || 'Médio');
+        setEditMaterialPet(at.material || 'Veludo plush e espuma ortopédica');
+        setEditLavavelPet(at.lavavel_em_maquina === 'Sim' || at.lavavel === true);
+        setEditAntialergicoPet(at.antialergico === 'Sim' || at.antialergico === true);
+
+        // Pré-preenchimento Cafeteria
+        setEditVolumeCafeteria(at.volume || '240ml (Caneca)');
+        setEditTemperaturaCafeteria(at.temperatura || 'Quente');
+        setEditGraoCafeteria(at.grao_ingrediente || at.grao || 'Catuaí Vermelho Artesanal 88 pts');
+        if (at.opcoes_leite && typeof at.opcoes_leite === 'string') {
+          setEditOpcoesLeiteCafeteria(at.opcoes_leite.split(',').map(s => s.trim()).filter(Boolean));
+        } else if (Array.isArray(at.opcoes_leite)) {
+          setEditOpcoesLeiteCafeteria(at.opcoes_leite);
+        } else {
+          setEditOpcoesLeiteCafeteria(['Integral Fresco', 'Aveia Barista']);
+        }
+        setEditVeganoCafeteria(at.vegano === 'Sim' || at.vegano === true);
+        setEditVegetarianoCafeteria(at.vegetariano === 'Sim' || at.vegetariano === true);
+        setEditSemGlutenCafeteria(at.sem_gluten === 'Sim' || at.sem_gluten === true);
+      };
+
+      const salvarEdicaoProduto = async (e) => {
+        e.preventDefault();
+        if (!produtoEmEdicao) return;
+        setSalvandoEdicao(true);
+
+        let parsedAtributos = {};
+        if (editModoAtributosAvancado) {
+          try {
+            parsedAtributos = JSON.parse(editAtributosManualJson || '{}');
+          } catch(err) {
+            alert('JSON de atributos inválido. Corrija o formato ou retorne aos seletores visuais.');
+            setSalvandoEdicao(false);
+            return;
+          }
+        } else {
+          if (editCategoria === 'Moda') {
+            parsedAtributos = {
+              tamanho: editTamanhoModa,
+              grade_disponivel: editGradesModa.join(', '),
+              cor: editCorModa,
+              tecido: editTecidoModa,
+              corte: editCorteModa,
+              ocasiao: editEstacaoModa
+            };
+          } else if (editCategoria === 'Pet') {
+            parsedAtributos = {
+              indicacao: editIndicacaoPet,
+              porte: editPortePet,
+              material: editMaterialPet,
+              lavavel_em_maquina: editLavavelPet ? 'Sim' : 'Não',
+              antialergico: editAntialergicoPet ? 'Sim' : 'Não'
+            };
+          } else if (editCategoria === 'Cafeteria') {
+            parsedAtributos = {
+              volume: editVolumeCafeteria,
+              temperatura: editTemperaturaCafeteria,
+              grao_ingrediente: editGraoCafeteria,
+              opcoes_leite: editOpcoesLeiteCafeteria.join(', '),
+              vegano: editVeganoCafeteria ? 'Sim' : 'Não',
+              vegetariano: editVegetarianoCafeteria ? 'Sim' : 'Não',
+              sem_gluten: editSemGlutenCafeteria ? 'Sim' : 'Não'
+            };
+          }
+        }
+
+        try {
+          const res = await fetch('/api/produtos', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (token || '')
+            },
+            body: JSON.stringify({
+              token,
+              id_produto: produtoEmEdicao.id_produto,
+              nome_item: editNome,
+              categoria: editCategoria,
+              preco: Number(editPreco),
+              estoque: Number(editEstoque),
+              imagem_url: editImagemUrl || produtoEmEdicao.imagem_url,
+              descricao: editDescricao,
+              atributos: parsedAtributos
+            })
+          });
+
+          const json = await res.json();
+          if (res.ok) {
+            mostrarNotificacao('Peça atualizada com sucesso no catálogo!');
+            setProdutoEmEdicao(null);
+            if (produtoModal && produtoModal.id_produto === produtoEmEdicao.id_produto) {
+              setProdutoModal(json.produto);
+            }
+            carregarDados();
+          } else {
+            alert(json.erro || 'Erro ao atualizar peça.');
+          }
+        } catch(err) {
+          alert('Erro na conexão ao salvar edição.');
+        } finally {
+          setSalvandoEdicao(false);
+        }
+      };
 
       const renderBotaoOlhoSenha = (visivel, aoAlternar, id = '') => (
         <button
@@ -1165,11 +1339,11 @@ function getFrontendHtml() {
       const [tipoPerfilCadastro, setTipoPerfilCadastro] = useState('cliente'); // 'cliente' | 'doador'
 
       const formatarCpf = (v) => {
-        const limpo = (v || '').replace(/\D/g, '').slice(0, 11);
-        return limpo
-          .replace(/(\d{3})(\d)/, '$1.$2')
-          .replace(/(\d{3})(\d)/, '$1.$2')
-          .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        const d = (v || '').replace(/\D/g, '').slice(0, 11);
+        if (d.length <= 3) return d;
+        if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
+        if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+        return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
       };
 
       const validarCpf = (cpf) => {
@@ -2085,23 +2259,38 @@ function getFrontendHtml() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Botão de Excluir Exclusivo para Administrador */}
+                        {/* Botões Exclusivos para Administrador (Editar e Excluir) */}
                         {usuario?.role === 'admin' && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm(\`Tem certeza que deseja excluir "\${prod.nome_item}" do catálogo da boutique?\`)) {
-                                excluirProduto(prod.id_produto);
-                              }
-                            }}
-                            className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 transition-all cursor-pointer shadow-sm"
-                            title="Excluir peça do catálogo"
-                          >
-                            <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                iniciarEdicaoProduto(prod);
+                              }}
+                              className="p-2 rounded-xl bg-celestial-900 hover:bg-ouro/20 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm"
+                              title="Editar peça do catálogo"
+                            >
+                              <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Tem certeza que deseja excluir "' + prod.nome_item + '" do catálogo da boutique?')) {
+                                  excluirProduto(prod.id_produto);
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 transition-all cursor-pointer shadow-sm"
+                              title="Excluir peça do catálogo"
+                            >
+                              <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                              </svg>
+                            </button>
+                          </div>
                         )}
 
                         {/* Botão Comprar com Proteção de Permissionamento */}
@@ -2493,21 +2682,590 @@ function getFrontendHtml() {
                     </div>
                   )}
                 </div>
-                <button
+                <div className="flex items-center gap-3">
+                  {usuario?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const prod = produtoModal;
+                        setProdutoModal(null);
+                        iniciarEdicaoProduto(prod);
+                      }}
+                      className="px-4 py-3.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/15 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Editar informações desta peça"
+                    >
+                      <span>✏️</span>
+                      <span>Editar Peça</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ok = tentarAdicionarAoCarrinho(produtoModal);
+                      if (ok) setProdutoModal(null);
+                    }}
+                    className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {!usuario && (
+                      <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    )}
+                    <span>Adicionar à Sacola</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DE EDIÇÃO DE PRODUTO / PEÇA DO CATÁLOGO (ADMINISTRADOR) */}
+          {/* ==================================================================== */}
+          {produtoEmEdicao && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="relative w-full max-w-2xl bg-celestial-900 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl border-2 border-ouro/50 gold-glow max-h-[92vh] overflow-y-auto">
+                <button 
                   type="button"
-                  onClick={() => {
-                    const ok = tentarAdicionarAoCarrinho(produtoModal);
-                    if (ok) setProdutoModal(null);
-                  }}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => setProdutoEmEdicao(null)} 
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-celestial-950 border border-ouro/40 hover:border-ouro text-ouro hover:text-white flex items-center justify-center text-lg font-bold transition-all cursor-pointer z-10"
+                  aria-label="Fechar"
                 >
-                  {!usuario && (
-    <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-    </svg>
-  )}
-                  <span>Adicionar à Sacola</span>
+                  ×
                 </button>
+
+                <div className="border-b border-ouro/20 pb-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-ouro/15 border border-ouro/40 flex items-center justify-center text-ouro text-lg">
+                    ✏️
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-ouro tracking-wider block">
+                      Gestão de Acervo &amp; Catálogo
+                    </span>
+                    <h3 className="font-serif text-xl sm:text-2xl font-bold gold-gradient-text">
+                      Editar Peça: {editNome || produtoEmEdicao.nome_item}
+                    </h3>
+                  </div>
+                </div>
+
+                <form onSubmit={salvarEdicaoProduto} className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      Nome da Peça / Produto
+                    </label>
+                    <input 
+                      name="edit_nome" 
+                      value={editNome} 
+                      onChange={(e) => setEditNome(e.target.value)} 
+                      required 
+                      placeholder="Ex: Vestido Estelar em Seda Pura" 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                        Categoria
+                      </label>
+                      <select
+                        name="edit_categoria"
+                        value={editCategoria}
+                        onChange={(e) => setEditCategoria(e.target.value)}
+                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer focus:border-ouro"
+                      >
+                        <option value="Moda">Moda (Alta Costura)</option>
+                        <option value="Pet">Pet Shop</option>
+                        <option value="Cafeteria">Cafeteria</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                        Preço (R$)
+                      </label>
+                      <input 
+                        name="edit_preco" 
+                        type="number" 
+                        step="0.01" 
+                        value={editPreco} 
+                        onChange={(e) => setEditPreco(e.target.value)} 
+                        required 
+                        placeholder="Ex: 349.90" 
+                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                        Estoque
+                      </label>
+                      <input 
+                        name="edit_estoque" 
+                        type="number" 
+                        min="0" 
+                        value={editEstoque} 
+                        onChange={(e) => setEditEstoque(e.target.value)} 
+                        required 
+                        placeholder="Ex: 10" 
+                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Foto da Peça */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                        Foto da Peça / Produto
+                      </label>
+                      <span className="text-[10px] text-luar-300">Galeria, PC ou URL</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                      <label className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro hover:text-celestial-950 font-bold text-xs cursor-pointer transition-all shadow-sm shrink-0">
+                        <span>📷</span>
+                        <span>{uploadingFotoEdit ? 'Processando foto...' : 'Escolher da Galeria ou PC'}</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          disabled={uploadingFotoEdit}
+                          onChange={(e) => {
+                            const arq = e.target.files && e.target.files[0];
+                            if (!arq) return;
+                            setUploadingFotoEdit(true);
+                            processarUploadImagem(
+                              arq,
+                              (url) => {
+                                setUploadingFotoEdit(false);
+                                setEditImagemUrl(url);
+                                setEditImagemPreview(url);
+                                mostrarNotificacao('Foto carregada com sucesso!', 'sucesso');
+                              },
+                              (err) => {
+                                setUploadingFotoEdit(false);
+                                alert('Erro ao enviar foto: ' + err);
+                              }
+                            );
+                          }}
+                        />
+                      </label>
+                      <div className="flex-1 relative">
+                        <input 
+                          name="edit_imagem" 
+                          value={editImagemUrl}
+                          onChange={(e) => {
+                            setEditImagemUrl(e.target.value);
+                            setEditImagemPreview(e.target.value);
+                          }}
+                          placeholder="Ou cole a URL da imagem (https://...)" 
+                          className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                        />
+                      </div>
+                      {editImagemPreview && (
+                        <div className="flex items-center gap-2 shrink-0 bg-celestial-950 p-1.5 rounded-xl border border-ouro/30">
+                          <img src={editImagemPreview} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-ouro/30" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditImagemUrl('');
+                              setEditImagemPreview('');
+                            }}
+                            className="text-xs text-red-400 hover:text-red-300 font-bold px-1.5 cursor-pointer"
+                            title="Remover foto"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Descrição */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
+                      Descrição Detalhada
+                    </label>
+                    <textarea 
+                      name="edit_descricao" 
+                      value={editDescricao} 
+                      onChange={(e) => setEditDescricao(e.target.value)} 
+                      placeholder="Detalhes do tecido, acabamentos, corte e proposta da peça..." 
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro resize-none" 
+                      rows="2"
+                    />
+                  </div>
+
+                  {/* SELETORES DE ATRIBUTOS (COM MODO JSONB) */}
+                  <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/35 space-y-3.5 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-ouro/20 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ouro font-serif">✦</span>
+                        <div>
+                          <span className="block text-xs font-bold text-ouro uppercase tracking-wider">
+                            {'Atributos & Detalhes da Peça (' + editCategoria + ')'}
+                          </span>
+                          <span className="block text-[10px] text-luar-300">
+                            {'Seleções rápidas e intuitivas organizadas para ' + (editCategoria === 'Moda' ? 'Alta Costura' : editCategoria === 'Pet' ? 'o Pet Shop' : 'a Cafeteria')}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditModoAtributosAvancado(!editModoAtributosAvancado)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-mono border border-ouro/30 text-ouro/80 hover:text-ouro hover:bg-ouro/10 cursor-pointer transition-colors"
+                      >
+                        {editModoAtributosAvancado ? '✨ Voltar aos Seletores' : '{ } Modo JSON'}
+                      </button>
+                    </div>
+
+                    {editModoAtributosAvancado ? (
+                      <div>
+                        <label className="block text-[10px] font-mono text-ouro/80 mb-1">JSONB Direto (PostgreSQL GIN):</label>
+                        <textarea
+                          name="edit_atributos_json"
+                          value={editAtributosManualJson}
+                          onChange={(e) => setEditAtributosManualJson(e.target.value)}
+                          rows="4"
+                          className="w-full p-3 rounded-xl bg-celestial-900 border border-ouro/30 text-xs font-mono text-ouro-light outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-3.5">
+                        {/* ATRIBUTOS: MODA */}
+                        {editCategoria === 'Moda' && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Tamanho Principal: <span className="text-luar-100 font-semibold">{editTamanhoModa}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['PP', 'P', 'M', 'G', 'GG', 'XG', 'Único'].map(tam => (
+                                  <button
+                                    key={tam}
+                                    type="button"
+                                    onClick={() => setEditTamanhoModa(tam)}
+                                    className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (editTamanhoModa === tam ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                  >
+                                    {tam}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Grade Disponível em Estoque:
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['PP', 'P', 'M', 'G', 'GG', 'XG', 'Sob Medida'].map(grade => {
+                                  const ativo = editGradesModa.includes(grade);
+                                  return (
+                                    <button
+                                      key={grade}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditGradesModa(ativo ? editGradesModa.filter(g => g !== grade) : [...editGradesModa, grade]);
+                                      }}
+                                      className={"px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer flex items-center gap-1 " + (ativo ? 'bg-ouro/20 border border-ouro text-ouro font-bold' : 'bg-celestial-900 border border-ouro/20 text-luar-300 hover:text-ouro')}
+                                    >
+                                      <span>{ativo ? '✓' : '+'}</span>
+                                      <span>{grade}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Cor Principal:
+                              </label>
+                              <input
+                                type="text"
+                                value={editCorModa}
+                                onChange={(e) => setEditCorModa(e.target.value)}
+                                placeholder="Ex: Azul Noturno com Fios Dourados"
+                                className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none mb-1.5"
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                {['Azul Meia-Noite', 'Dourado Imperial', 'Preto Absoluto', 'Branco Pérola', 'Vinho Borgonha', 'Verde Esmeralda', 'Terracota'].map(c => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setEditCorModa(c)}
+                                    className={"text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all " + (editCorModa === c ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 text-luar-300 hover:text-ouro border border-ouro/20')}
+                                  >
+                                    {c}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Tecido / Material:</label>
+                                <select
+                                  value={editTecidoModa}
+                                  onChange={(e) => setEditTecidoModa(e.target.value)}
+                                  className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                >
+                                  <option value="Seda pura acetinada">Seda Pura Acetinada</option>
+                                  <option value="Veludo Cristal Francês">Veludo Cristal Francês</option>
+                                  <option value="Linho Rústico Nobre">Linho Rústico Nobre</option>
+                                  <option value="Crepe de Seda Italiano">Crepe de Seda Italiano</option>
+                                  <option value="Renda Chantilly Artesanal">Renda Chantilly Artesanal</option>
+                                  <option value="Brocado com Fios Dourados">Brocado com Fios Dourados</option>
+                                  <option value="Algodão Pima Peruano">Algodão Pima Peruano</option>
+                                  <option value="Tule Bordado com Pedrarias">Tule Bordado com Pedrarias</option>
+                                  <option value="Lã Fina Cashmere">Lã Fina Cashmere</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Corte &amp; Caimento:</label>
+                                <select
+                                  value={editCorteModa}
+                                  onChange={(e) => setEditCorteModa(e.target.value)}
+                                  className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                                >
+                                  <option value="Evasê Fluído">Evasê Fluído</option>
+                                  <option value="Alfaiataria Slim Nobre">Alfaiataria Slim Nobre</option>
+                                  <option value="Oversized Estruturado">Oversized Estruturado</option>
+                                  <option value="Sereia Ajustado">Sereia Ajustado</option>
+                                  <option value="Reto Clássico">Reto Clássico</option>
+                                  <option value="Envelope Transpassado">Envelope Transpassado</option>
+                                  <option value="Godê com Volume">Godê com Volume</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Ocasião / Coleção: <span className="text-luar-100 font-semibold">{editEstacaoModa}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['Noite / Gala', 'Casual Chic', 'Alta Joalheria', 'Primavera / Verão', 'Outono / Inverno'].map(est => (
+                                  <button
+                                    key={est}
+                                    type="button"
+                                    onClick={() => setEditEstacaoModa(est)}
+                                    className={"px-2.5 py-1 rounded-lg text-[11px] cursor-pointer transition-all " + (editEstacaoModa === est ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                  >
+                                    {est}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ATRIBUTOS: PET */}
+                        {editCategoria === 'Pet' && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Indicação: <span className="text-luar-100 font-semibold">{editIndicacaoPet}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['Cães e Gatos', 'Cães Pequenos', 'Cães Grandes', 'Gatos', 'Filhotes'].map(ind => (
+                                  <button
+                                    key={ind}
+                                    type="button"
+                                    onClick={() => setEditIndicacaoPet(ind)}
+                                    className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (editIndicacaoPet === ind ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                  >
+                                    {ind}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Porte Recomendado: <span className="text-luar-100 font-semibold">{editPortePet}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['Mini (até 3kg)', 'Pequeno (3 a 7kg)', 'Médio (7 a 15kg)', 'Grande (15 a 30kg)', 'Gigante (+30kg)'].map(porte => (
+                                  <button
+                                    key={porte}
+                                    type="button"
+                                    onClick={() => setEditPortePet(porte)}
+                                    className={"px-2.5 py-1 rounded-lg text-[11px] cursor-pointer transition-all " + (editPortePet === porte ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                  >
+                                    {porte}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Material / Composição:</label>
+                              <select
+                                value={editMaterialPet}
+                                onChange={(e) => setEditMaterialPet(e.target.value)}
+                                className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                              >
+                                <option value="Veludo plush e espuma ortopédica">Veludo Plush e Espuma Ortopédica</option>
+                                <option value="Algodão orgânico respirável hipoalergênico">Algodão Orgânico Respirável Hipoalergênico</option>
+                                <option value="Couro ecológico macio e acolchoado">Couro Ecológico Macio e Acolchoado</option>
+                                <option value="Microfibra impermeável de alta resistência">Microfibra Impermeável de Alta Resistência</option>
+                                <option value="Tricô soft aconchegante térmico">Tricô Soft Aconchegante Térmico</option>
+                                <option value="Nylon náutico reforçado antirasgo">Nylon Náutico Reforçado Antirasgo</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setEditLavavelPet(!editLavavelPet)}
+                                className={"p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between " + (editLavavelPet ? 'bg-ouro/20 border-ouro text-ouro' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                              >
+                                <span>🫧 Lavável em Máquina</span>
+                                <span>{editLavavelPet ? '✓ Sim' : '✕ Não'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditAntialergicoPet(!editAntialergicoPet)}
+                                className={"p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between " + (editAntialergicoPet ? 'bg-ouro/20 border-ouro text-ouro' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                              >
+                                <span>🛡️ Hipoalergênico</span>
+                                <span>{editAntialergicoPet ? '✓ Sim' : '✕ Não'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ATRIBUTOS: CAFETERIA */}
+                        {editCategoria === 'Cafeteria' && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Volume / Porção: <span className="text-luar-100 font-semibold">{editVolumeCafeteria}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['Dose 50ml', 'Xícara 120ml', 'Caneca 240ml', 'Grande 350ml', 'Porção 100g', 'Fatia 150g'].map(vol => (
+                                  <button
+                                    key={vol}
+                                    type="button"
+                                    onClick={() => setEditVolumeCafeteria(vol)}
+                                    className={"px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (editVolumeCafeteria === vol ? 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 shadow-md font-bold' : 'bg-celestial-900 text-luar-200 border border-ouro/25 hover:border-ouro/60')}
+                                  >
+                                    {vol}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Temperatura de Serviço: <span className="text-luar-100 font-semibold">{editTemperaturaCafeteria}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {[
+                                  { rotulo: '☕ Quente', valor: 'Quente' },
+                                  { rotulo: '❄️ Gelado', valor: 'Gelado' },
+                                  { rotulo: '🥐 Ambiente', valor: 'Ambiente' }
+                                ].map(item => (
+                                  <button
+                                    key={item.valor}
+                                    type="button"
+                                    onClick={() => setEditTemperaturaCafeteria(item.valor)}
+                                    className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer " + (editTemperaturaCafeteria === item.valor ? 'bg-ouro text-celestial-950 font-bold' : 'bg-celestial-900 border border-ouro/25 text-luar-200 hover:text-ouro')}
+                                  >
+                                    {item.rotulo}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">Grão Especial ou Ingrediente Nobre:</label>
+                              <select
+                                value={editGraoCafeteria}
+                                onChange={(e) => setEditGraoCafeteria(e.target.value)}
+                                className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none cursor-pointer"
+                              >
+                                <option value="Catuaí Vermelho Artesanal 88 pts">Catuaí Vermelho Artesanal 88 pts</option>
+                                <option value="Bourbon Amarelo Vulcânico">Bourbon Amarelo Vulcânico</option>
+                                <option value="Geisha Especial Premiado">Geisha Especial Premiado</option>
+                                <option value="Matcha Cerimonial Uji Japão">Matcha Cerimonial Uji Japão</option>
+                                <option value="Cacau Belga 70% Single Origin">Cacau Belga 70% Single Origin</option>
+                                <option value="Chá Branco com Flores de Jasmim">Chá Branco com Flores de Jasmim</option>
+                                <option value="Pistache Siciliano com Flor de Sal">Pistache Siciliano com Flor de Sal</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-ouro/90 uppercase mb-1">
+                                Opções de Leite / Base Aceitas:
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['Integral Fresco', 'Aveia Barista', 'Amêndoas', 'Sem Lactose', 'Coco Artesanal'].map(leite => {
+                                  const ativo = editOpcoesLeiteCafeteria.includes(leite);
+                                  return (
+                                    <button
+                                      key={leite}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditOpcoesLeiteCafeteria(ativo ? editOpcoesLeiteCafeteria.filter(l => l !== leite) : [...editOpcoesLeiteCafeteria, leite]);
+                                      }}
+                                      className={"px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer flex items-center gap-1 " + (ativo ? 'bg-ouro/20 border border-ouro text-ouro font-bold' : 'bg-celestial-900 border border-ouro/20 text-luar-300 hover:text-ouro')}
+                                    >
+                                      <span>{ativo ? '✓' : '+'}</span>
+                                      <span>{leite}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setEditVeganoCafeteria(!editVeganoCafeteria)}
+                                className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (editVeganoCafeteria ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                              >
+                                <span>🌿 Vegano</span>
+                                <span>{editVeganoCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditVegetarianoCafeteria(!editVegetarianoCafeteria)}
+                                className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (editVegetarianoCafeteria ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                              >
+                                <span>🧀 Vegetariano</span>
+                                <span>{editVegetarianoCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditSemGlutenCafeteria(!editSemGlutenCafeteria)}
+                                className={"p-2 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex flex-col items-center gap-1 " + (editSemGlutenCafeteria ? 'bg-amber-950/60 border-amber-500 text-amber-300' : 'bg-celestial-900 border-ouro/25 text-luar-400')}
+                              >
+                                <span>🌾 Sem Glúten</span>
+                                <span>{editSemGlutenCafeteria ? '✓ Sim' : '✕ Não'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setProdutoEmEdicao(null)}
+                      className="flex-1 py-3.5 rounded-xl bg-celestial-950 border border-ouro/30 text-luar-300 hover:text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={salvandoEdicao}
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <span>{salvandoEdicao ? 'Salvando Alterações...' : 'Salvar Alterações'}</span>
+                      <span>✦</span>
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -2701,7 +3459,10 @@ function getFrontendHtml() {
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
               <div className="relative w-full max-w-md bg-celestial-900 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl border-2 border-ouro/50 gold-glow">
                 <button 
-                  onClick={() => setModalRegistroAdocao(null)} 
+                  onClick={() => {
+                    setModalRegistroAdocao(null);
+                    setRegistroAdocaoCpf('');
+                  }} 
                   className="absolute top-4 right-4 text-ouro hover:text-white text-2xl font-bold cursor-pointer"
                 >
                   ×
@@ -2720,7 +3481,7 @@ function getFrontendHtml() {
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   const adotante_nome = e.target.nome.value;
-                  const adotante_cpf = e.target.cpf.value;
+                  const adotante_cpf = registroAdocaoCpf || e.target.cpf.value;
                   const adotante_telefone = e.target.telefone.value;
 
                   if (!validarCpf(adotante_cpf)) {
@@ -2746,6 +3507,7 @@ function getFrontendHtml() {
                   if (res.ok) {
                     mostrarNotificacao('Parabéns! ' + modalRegistroAdocao.nome_pet + ' agora está formalmente adotado.');
                     setModalRegistroAdocao(null);
+                    setRegistroAdocaoCpf('');
                     carregarDados();
                   } else {
                     const json = await res.json();
@@ -2758,7 +3520,15 @@ function getFrontendHtml() {
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">CPF do Tutor</label>
-                    <input name="cpf" required placeholder="000.000.000-00" className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" />
+                    <input 
+                      name="cpf" 
+                      required 
+                      value={registroAdocaoCpf}
+                      onChange={(e) => setRegistroAdocaoCpf(formatarCpf(e.target.value))}
+                      placeholder="000.000.000-00" 
+                      maxLength="14"
+                      className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                    />
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">WhatsApp / Telefone</label>
@@ -3767,6 +4537,7 @@ function getFrontendHtml() {
                         )}
                       </div>
                       <input 
+                        id="input-cpf-cadastro"
                         name="cpf" 
                         value={cpfCadastro}
                         onChange={(e) => setCpfCadastro(formatarCpf(e.target.value))}
@@ -4190,6 +4961,7 @@ function getFrontendHtml() {
                 ) : (
                   <div className="flex flex-wrap gap-1 bg-celestial-950 p-1.5 rounded-2xl border border-ouro/30">
                     <button
+                      id="tab-admin-cadastrar"
                       type="button"
                       onClick={() => setAbaGestao('cadastrar')}
                       className={"flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer " + (abaGestao === 'cadastrar' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 shadow-md font-bold' : 'text-luar-300 hover:text-ouro')}
@@ -4197,6 +4969,7 @@ function getFrontendHtml() {
                       + Peça
                     </button>
                     <button
+                      id="tab-admin-produtos"
                       type="button"
                       onClick={() => setAbaGestao('produtos')}
                       className={"flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer " + (abaGestao === 'produtos' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 shadow-md font-bold' : 'text-luar-300 hover:text-ouro')}
@@ -4819,17 +5592,30 @@ function getFrontendHtml() {
                               <span className="text-xs font-serif text-ouro font-semibold">{formatBRL(p.preco)}</span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(\`Tem certeza que deseja excluir permanentemente "\${p.nome_item}" do catálogo?\`)) {
-                                excluirProduto(p.id_produto);
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 text-xs font-semibold transition-all cursor-pointer flex-shrink-0 flex items-center gap-1.5"
-                          >
-                            <span>Excluir</span>
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAdminOpen(false);
+                                iniciarEdicaoProduto(p);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-celestial-900 hover:bg-ouro/20 border border-ouro/40 text-ouro hover:text-ouro-light text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                              title="Editar peça"
+                            >
+                              <span>✏️ Editar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm('Tem certeza que deseja excluir permanentemente "' + p.nome_item + '" do catálogo?')) {
+                                  excluirProduto(p.id_produto);
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                              <span>Excluir</span>
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -5551,7 +6337,10 @@ function getFrontendHtml() {
                                     {pet.status !== 'Adotado' ? (
                                       <button
                                         type="button"
-                                        onClick={() => setModalRegistroAdocao(pet)}
+                                        onClick={() => {
+                                          setRegistroAdocaoCpf('');
+                                          setModalRegistroAdocao(pet);
+                                        }}
                                         className="py-1.5 px-3 rounded-xl bg-ouro/20 hover:bg-ouro/30 text-ouro border border-ouro/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap"
                                       >
                                         Registrar Adoção
@@ -6362,6 +7151,56 @@ const server = http.createServer((req, res) => {
       mensagem: `A peça "${removido.nome_item}" foi excluída com sucesso do catálogo e banco de dados.`,
       id_produto: idProduto 
     }));
+    return;
+  }
+
+  // PUT /api/produtos (EDIÇÃO DE PEÇAS / PRODUTOS - EXCLUSIVO PARA ADMINISTRADORES)
+  if (pathname === '/api/produtos' && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const dados = JSON.parse(body);
+        const authHeader = req.headers['authorization'];
+        let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+        if (!token && dados.token) token = dados.token;
+
+        const payload = token ? verificarJwt(token) : null;
+        if (!payload || payload.role !== 'admin') {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Permissão negada. Apenas administradores podem editar peças do catálogo.' }));
+          return;
+        }
+
+        const idProduto = Number(dados.id_produto || parsedUrl.query.id);
+        const produto = produtos.find(p => p.id_produto === idProduto);
+        if (!produto) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Peça não encontrada no catálogo.' }));
+          return;
+        }
+
+        if (dados.nome_item !== undefined && dados.nome_item.trim()) produto.nome_item = dados.nome_item.trim();
+        if (dados.categoria !== undefined && dados.categoria.trim()) produto.categoria = dados.categoria.trim();
+        if (dados.preco !== undefined && !isNaN(Number(dados.preco))) produto.preco = Number(dados.preco);
+        if (dados.estoque !== undefined && !isNaN(Number(dados.estoque))) produto.estoque = Number(dados.estoque);
+        if (dados.atributos !== undefined) produto.atributos = dados.atributos;
+        if (dados.imagem_url !== undefined && dados.imagem_url.trim()) produto.imagem_url = dados.imagem_url.trim();
+        if (dados.descricao !== undefined) produto.descricao = dados.descricao;
+
+        salvarProdutosNoDisco();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          sucesso: true, 
+          mensagem: `A peça "${produto.nome_item}" foi atualizada com sucesso no banco de dados.`,
+          produto 
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'JSON inválido ao atualizar produto.' }));
+      }
+    });
     return;
   }
 

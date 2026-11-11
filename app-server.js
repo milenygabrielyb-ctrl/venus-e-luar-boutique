@@ -1479,6 +1479,9 @@ function getFrontendHtml() {
       const [emailCadastro, setEmailCadastro] = useState('');
       const [senhaCadastro, setSenhaCadastro] = useState('');
       const [tipoPerfilCadastro, setTipoPerfilCadastro] = useState('cliente'); // 'cliente' | 'doador'
+      const [concordaTermosLgpd, setConcordaTermosLgpd] = useState(false);
+      const [modalTermosLgpdAberto, setModalTermosLgpdAberto] = useState(false);
+      const [secaoTermosAtiva, setSecaoTermosAtiva] = useState('todos'); // 'todos' | 'termos_uso' | 'compras' | 'adocao' | 'lgpd'
 
 
       const validarCpf = (cpf) => {
@@ -5060,6 +5063,11 @@ function getFrontendHtml() {
                     const email = emailCadastro;
                     const senha = senhaCadastro;
 
+                    if (!concordaTermosLgpd) {
+                      alert('Para criar sua conta, é obrigatório ler e concordar com os Documentos Legais e Políticas da Vênus & Luar (LGPD).');
+                      return;
+                    }
+
                     if (cpf && cpf.trim().length > 0 && !validarCpf(cpf)) {
                       alert('CPF incompleto ou inválido. Se desejar cadastrar seu CPF agora, digite os 11 dígitos numéricos válidos ou deixe o campo em branco (opcional).');
                       return;
@@ -5068,7 +5076,7 @@ function getFrontendHtml() {
                     const res = await fetch('/api/auth/registrar', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ nome, cpf, email, senha, role: tipoPerfilCadastro })
+                      body: JSON.stringify({ nome, cpf, email, senha, role: tipoPerfilCadastro, concorda_termos: concordaTermosLgpd })
                     });
                     const json = await res.json();
                     if (res.ok) {
@@ -5081,6 +5089,7 @@ function getFrontendHtml() {
                       setCpfCadastro('');
                       setEmailCadastro('');
                       setSenhaCadastro('');
+                      setConcordaTermosLgpd(false);
                       if (json.usuario.role === 'doador') {
                         mostrarNotificacao('Conta de Doador criada com sucesso! Acesse o Painel do Doador para cadastrar seus pets.');
                       } else {
@@ -5262,6 +5271,30 @@ function getFrontendHtml() {
                           Mínimo de 8 caracteres para proteção da conta.
                         </p>
                       )}
+                    </div>
+
+                    {/* Checkbox Obrigatória de Aceite dos Termos LGPD e Políticas */}
+                    <div className="sm:col-span-2 pt-1 pb-1">
+                      <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#040711] border border-ouro/30 hover:border-ouro/60 transition-all">
+                        <input 
+                          id="checkbox-termos-lgpd"
+                          type="checkbox"
+                          checked={concordaTermosLgpd}
+                          onChange={(e) => setConcordaTermosLgpd(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-ouro/50 text-ouro focus:ring-ouro focus:ring-offset-celestial-950 bg-celestial-900 cursor-pointer accent-[#DFB15B]"
+                        />
+                        <label htmlFor="checkbox-termos-lgpd" className="text-xs text-[#E6E1D3] leading-relaxed cursor-pointer select-none">
+                          Li, compreendi e concordo com os{' '}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModalTermosLgpdAberto(true); }}
+                            className="text-ouro font-bold underline hover:text-[#FFE8A3] transition-colors inline-block cursor-pointer"
+                          >
+                            Documentos Legais e Políticas da Vênus &amp; Luar (LGPD)
+                          </button>
+                          , incluindo os Termos de Uso, Política de E-commerce, Regras de Adoção e Proteção de Dados Pessoais.
+                        </label>
+                      </div>
                     </div>
 
                     {/* Botão de Envio (Ocupa 2 Colunas) */}
@@ -5536,6 +5569,227 @@ function getFrontendHtml() {
                   <span>Ambiente seguro e exclusivo Vênus e Luar Boutique</span>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DE DOCUMENTOS LEGAIS E POLÍTICAS DA VÊNUS & LUAR (LGPD) */}
+          {/* ==================================================================== */}
+          {modalTermosLgpdAberto && (
+            <div 
+              id="modal-termos-lgpd-overlay"
+              style={{ backgroundColor: 'rgba(3, 6, 14, 0.94)' }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn"
+              onClick={() => setModalTermosLgpdAberto(false)}
+            >
+              <div 
+                id="modal-termos-lgpd-conteudo"
+                style={{ backgroundColor: '#080E1E' }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.95)] border border-ouro/50 gold-glow overflow-hidden"
+              >
+                {/* Cabeçalho Nobre */}
+                <div className="px-6 py-5 border-b border-ouro/30 bg-celestial-950 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full border border-ouro/60 bg-[#040711] p-1 flex items-center justify-center shadow-md">
+                      <span className="text-xl">📜</span>
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-lg sm:text-xl font-bold gold-gradient-text leading-tight">
+                        Documentos Legais e Políticas da Vênus &amp; Luar
+                      </h3>
+                      <p className="text-[11px] text-ouro/80 font-light">
+                        Transparência, Segurança Jurídica e Proteção de Dados (LGPD • Lei nº 13.709/2018)
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    id="btn-fechar-modal-termos-x"
+                    type="button"
+                    onClick={() => setModalTermosLgpdAberto(false)}
+                    className="w-8 h-8 rounded-full bg-celestial-900 border border-ouro/30 hover:border-ouro text-ouro hover:text-white flex items-center justify-center text-lg font-bold transition-all cursor-pointer"
+                    aria-label="Fechar"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Barra de Filtros / Abas */}
+                <div className="px-6 py-2.5 bg-celestial-900/60 border-b border-ouro/20 flex flex-wrap gap-2 shrink-0 overflow-x-auto">
+                  {[
+                    { id: 'todos', label: '📖 Todos os Documentos' },
+                    { id: 'termos_uso', label: '1. Termos de Uso' },
+                    { id: 'compras', label: '2. Compras & Entregas' },
+                    { id: 'adocao', label: '3. Painel de Adoção' },
+                    { id: 'lgpd', label: '4. Privacidade (LGPD)' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      id={"tab-termos-" + tab.id}
+                      type="button"
+                      onClick={() => setSecaoTermosAtiva(tab.id)}
+                      className={"px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer " + (
+                        secaoTermosAtiva === tab.id
+                          ? 'bg-ouro text-celestial-950 font-bold shadow-md'
+                          : 'bg-celestial-950 text-[#C2B9A3] border border-ouro/25 hover:border-ouro hover:text-ouro'
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Conteúdo Rolável dos Documentos */}
+                <div className="p-6 overflow-y-auto space-y-6 text-[#E6E1D3] text-xs sm:text-sm leading-relaxed divide-y divide-ouro/15">
+                  
+                  {/* SEÇÃO 1: TERMOS E CONDIÇÕES DE USO */}
+                  {(secaoTermosAtiva === 'todos' || secaoTermosAtiva === 'termos_uso') && (
+                    <div id="secao-termos-1" className="space-y-3 pt-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-ouro/20 text-ouro text-[11px] font-bold uppercase tracking-wider border border-ouro/30">1</span>
+                        <h4 className="font-serif text-base sm:text-lg font-bold text-ouro">Termos e Condições de Uso (Regras Gerais)</h4>
+                      </div>
+                      <p className="text-[#C2B9A3] italic text-xs">
+                        Este documento define as diretrizes básicas para a navegação e utilização de todos os serviços oferecidos em nossa plataforma.
+                      </p>
+                      <div className="space-y-3 pl-2.5 border-l-2 border-ouro/30">
+                        <div>
+                          <strong className="text-ouro font-semibold">Cadastro e Conta:</strong> Para utilizar nossos serviços de compra e o painel de adoção, você concorda em fornecer dados exatos, precisos e verdadeiros, assumindo o compromisso de atualizar seus dados pessoais sempre que houver alguma alteração. Você é o único responsável por manter a confidencialidade da sua senha de acesso. Ao se cadastrar, você confirma ser maior de 18 (dezoito) anos e ter plena capacidade legal para realizar compras ou firmar compromissos de adoção.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Conduta do Usuário:</strong> É estritamente proibido o uso da plataforma para fins ilícitos, incluindo, mas não se limitando a: fraudes, envio de mensagens indesejadas (spam), assédio, ou publicação de informações falsas e enganosas sobre animais no painel de adoção.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Propriedade Intelectual:</strong> Todo o conteúdo deste site (textos, logotipos, imagens de produtos, marcas e design) pertence exclusivamente à Vênus &amp; Luar ou aos seus respectivos parceiros, sendo vedada a reprodução total ou parcial sem autorização prévia por escrito.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 2: POLÍTICA DE COMPRAS, TROCAS E ENTREGAS */}
+                  {(secaoTermosAtiva === 'todos' || secaoTermosAtiva === 'compras') && (
+                    <div id="secao-termos-2" className="space-y-3 pt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-ouro/20 text-ouro text-[11px] font-bold uppercase tracking-wider border border-ouro/30">2</span>
+                        <h4 className="font-serif text-base sm:text-lg font-bold text-ouro">Política de Compras, Trocas e Entregas (E-commerce)</h4>
+                      </div>
+                      <p className="text-[#C2B9A3] italic text-xs">
+                        Esta seção estabelece as regras comerciais para as aquisições realizadas na nossa loja online.
+                      </p>
+                      <div className="space-y-3 pl-2.5 border-l-2 border-ouro/30">
+                        <div>
+                          <strong className="text-ouro font-semibold">Preços e Pagamento:</strong> Os preços e condições de pagamento exibidos são válidos exclusivamente para compras realizadas no site. Aceitamos as formas de pagamento informadas no checkout (Cartão de Crédito, Pix e Boleto, conforme disponibilidade). Reservamo-nos o direito de corrigir eventuais erros evidentes de digitação em valores antes do processamento do pedido.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Entregas:</strong> Os prazos de entrega passam a contar a partir da confirmação do pagamento pela instituição financeira. O prazo pode variar conforme a região de destino e a modalidade de frete selecionada. É dever do cliente fornecer o endereço completo e correto para envio.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Direito de Arrependimento e Trocas:</strong> Conforme o Artigo 49 do Código de Defesa do Consumidor (CDC), o cliente tem até 7 (sete) dias corridos a partir do recebimento do produto para solicitar a devolução ou troca por arrependimento, desde que o produto esteja em sua embalagem original, sem indícios de uso, com lacres inviolados e acompanhado de todos os acessórios e nota fiscal. Produtos com defeito de fabricação seguem a garantia legal de 30 (trinta) dias para bens não duráveis e 90 (noventa) dias para bens duráveis.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 3: REGRAS DO PAINEL DE ADOÇÃO / DOAÇÃO DE PETS */}
+                  {(secaoTermosAtiva === 'todos' || secaoTermosAtiva === 'adocao') && (
+                    <div id="secao-termos-3" className="space-y-3 pt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-ouro/20 text-ouro text-[11px] font-bold uppercase tracking-wider border border-ouro/30">3</span>
+                        <h4 className="font-serif text-base sm:text-lg font-bold text-ouro">Regras do Painel de Adoção / Doação de Pets</h4>
+                      </div>
+                      <p className="text-[#C2B9A3] italic text-xs">
+                        O painel de adoção é um serviço comunitário destinado a conectar tutores, abrigos e protetores a potenciais adotantes responsáveis.
+                      </p>
+                      <div className="space-y-3 pl-2.5 border-l-2 border-ouro/30">
+                        <div>
+                          <strong className="text-ouro font-semibold">Natureza do Serviço:</strong> A Vênus &amp; Luar atua apenas como facilitadora e intermediária de contato entre as partes, não sendo proprietária dos animais divulgados por terceiros nem garantindo o estado de saúde, temperamento ou histórico médico dos pets cadastrados por usuários independentes.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Compromisso de Posse Responsável:</strong> Ao manifestar interesse na adoção de um animal, o adotante assume o compromisso moral e legal de oferecer alimentação adequada, abrigo, cuidados veterinários, vacinação e carinho ao animal durante toda a sua vida, nunca o abandonando ou praticando maus-tratos (atos puníveis pela Lei Federal nº 9.605/1998).
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Veracidade das Informações:</strong> Quem cadastra um animal para doação declara que tem o direito legal de fazê-lo e que as informações de saúde, porte, idade e temperamento fornecidas correspondem fielmente à realidade. É terminantemente proibida a comercialização (venda de animais) através do nosso painel de adoção comunitário.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 4: POLÍTICA DE PRIVACIDADE (LGPD) */}
+                  {(secaoTermosAtiva === 'todos' || secaoTermosAtiva === 'lgpd') && (
+                    <div id="secao-termos-4" className="space-y-3 pt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-ouro/20 text-ouro text-[11px] font-bold uppercase tracking-wider border border-ouro/30">4</span>
+                        <h4 className="font-serif text-base sm:text-lg font-bold text-ouro">Política de Privacidade (LGPD)</h4>
+                      </div>
+                      <p className="text-[#C2B9A3] italic text-xs">
+                        Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD), esta política detalha como coletamos, usamos, armazenamos e protegemos seus dados pessoais.
+                      </p>
+                      <div className="space-y-3 pl-2.5 border-l-2 border-ouro/30">
+                        <div>
+                          <strong className="text-ouro font-semibold">Dados Coletados:</strong> Coletamos dados cadastrais (como nome, e-mail, telefone, CPF e endereço) necessários para emissão de nota fiscal, faturamento e entrega de compras. Para o painel de adoção, coletamos informações de contato para permitir a comunicação entre doador e adotante.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Finalidade do Tratamento:</strong> Seus dados são utilizados para:
+                          <ul className="list-disc pl-5 mt-1.5 space-y-1 text-[#C2B9A3]">
+                            <li>a) Processar e entregar seus pedidos;</li>
+                            <li>b) Emitir documentos fiscais obrigatórios por lei;</li>
+                            <li>c) Permitir o gerenciamento da sua conta de usuário e autenticação segura;</li>
+                            <li>d) Facilitar o contato entre as partes interessadas em adoções responsáveis;</li>
+                            <li>e) Enviar comunicações importantes sobre seus pedidos e, mediante seu consentimento, promoções e novidades da boutique.</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Compartilhamento Seguro:</strong> A Vênus &amp; Luar não vende nem aluga seus dados pessoais a terceiros. Seus dados são compartilhados apenas com parceiros essenciais para a operação do negócio (empresas de logística/entregas, gateways de pagamento seguros e autoridades judiciais/fiscais quando exigido por lei).
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Segurança da Informação:</strong> Implementamos medidas técnicas e administrativas aptas a proteger seus dados contra acessos não autorizados, perda, alteração ou destruição. Seus dados cadastrais como senhas são criptografados e não são armazenados em texto simples.
+                        </div>
+                        <div>
+                          <strong className="text-ouro font-semibold">Direitos do Titular:</strong> Você tem o direito de solicitar a qualquer momento a confirmação da existência de tratamento dos seus dados, o acesso aos dados coletados, a correção de dados incompletos ou inexatos, a anonimização ou eliminação de dados desnecessários, e a revogação do consentimento, pelos nossos canais oficiais de atendimento.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Rodapé de Ações do Modal */}
+                <div className="px-6 py-4 border-t border-ouro/30 bg-celestial-950 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-2 text-xs text-ouro/80">
+                    <span>🔒</span>
+                    <span>Vênus &amp; Luar • Proteção Integral de Dados (LGPD)</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                    <button
+                      id="btn-fechar-modal-termos"
+                      type="button"
+                      onClick={() => setModalTermosLgpdAberto(false)}
+                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-ouro/30 text-[#ECE6D6] hover:text-white hover:border-ouro text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      id="btn-aceitar-termos-lgpd-modal"
+                      type="button"
+                      onClick={() => {
+                        setConcordaTermosLgpd(true);
+                        setModalTermosLgpdAberto(false);
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #FFE8A3 0%, #DFB15B 50%, #B88B35 100%)',
+                        color: '#080E1E',
+                        fontWeight: '800',
+                        border: '1px solid #FFE8A3',
+                        boxShadow: '0 4px 15px rgba(223, 177, 91, 0.4)'
+                      }}
+                      className="flex-1 sm:flex-none px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <span>✓</span>
+                      <span>Li e Concordo com os Termos &amp; Políticas</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -7532,6 +7786,34 @@ function getFrontendHtml() {
                   boutiquevenuseluar@gmail.com
                 </a>
               </div>
+              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs pt-1">
+                <button
+                  id="btn-footer-termos-lgpd"
+                  type="button"
+                  onClick={() => { setSecaoTermosAtiva('todos'); setModalTermosLgpdAberto(true); }}
+                  className="inline-flex items-center gap-1.5 text-ouro hover:text-[#FFE8A3] transition-colors underline cursor-pointer"
+                >
+                  📜 Documentos Legais &amp; Políticas (LGPD)
+                </button>
+                <span className="text-stone-600 hidden sm:inline">•</span>
+                <button
+                  id="btn-footer-termos-privacidade"
+                  type="button"
+                  onClick={() => { setSecaoTermosAtiva('lgpd'); setModalTermosLgpdAberto(true); }}
+                  className="inline-flex items-center gap-1.5 text-stone-300 hover:text-ouro transition-colors cursor-pointer"
+                >
+                  🔒 Privacidade &amp; Proteção de Dados
+                </button>
+                <span className="text-stone-600 hidden sm:inline">•</span>
+                <button
+                  id="btn-footer-termos-adocao"
+                  type="button"
+                  onClick={() => { setSecaoTermosAtiva('adocao'); setModalTermosLgpdAberto(true); }}
+                  className="inline-flex items-center gap-1.5 text-stone-300 hover:text-ouro transition-colors cursor-pointer"
+                >
+                  🐾 Regras do Painel de Adoção
+                </button>
+              </div>
               <div className="text-[11px] text-stone-400 pt-3 border-t border-ouro/10">
                 © 2026 Vênus e Luar Boutique. Todos os direitos reservados.
               </div>
@@ -8763,17 +9045,23 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { nome, email, senha, cpf, role, tipo_perfil } = JSON.parse(body);
+        const { nome, email, senha, cpf, role, tipo_perfil, concorda_termos } = JSON.parse(body);
         if (!nome || !email || !senha) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail e Senha).' }));
           return;
         }
 
+        if (concorda_termos !== true && concorda_termos !== 'true') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Para criar uma conta, é obrigatório ler e concordar com os Documentos Legais e Políticas da Vênus & Luar (LGPD).' }));
+          return;
+        }
+
         // CPF Opcional: só valida e formata se fornecido
         let cpfFormatado = null;
         if (cpf && typeof cpf === 'string' && cpf.trim().length > 0) {
-          const cpfLimpo = cpf.replace(/\D/g, '');
+          const cpfLimpo = cpf.replace(/[^0-9]/g, '');
           if (cpfLimpo.length > 0) {
             if (!validarCpf(cpfLimpo)) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -8783,7 +9071,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
               return;
             }
             // Bloqueio de duplicidade de CPF
-            if (usuarios.some(u => u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+            if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
               res.writeHead(409, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
               return;
@@ -8822,6 +9110,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           cpf: cpfFormatado,
           senha_hash: gerarHashScrypt(senha),
           role: papelFinal,
+          termos_lgpd_aceito: true,
+          termos_lgpd_aceito_em: agora,
           criado_em: agora,
           ultimo_acesso: agora
         };
@@ -8838,6 +9128,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             email: novoUsuario.email,
             cpf: novoUsuario.cpf,
             role: novoUsuario.role,
+            termos_lgpd_aceito: true,
+            termos_lgpd_aceito_em: agora,
             foto_perfil: null,
             cpf_alterado: false
           }

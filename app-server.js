@@ -934,7 +934,7 @@ function getFrontendHtml() {
     // ==========================================
     const formatarCpf = (v) => {
       if (!v) return '';
-      const d = String(v).replace(/\D/g, '').slice(0, 11);
+      const d = String(v).replace(/[^0-9]/g, '').slice(0, 11);
       if (d.length <= 3) return d;
       if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
       if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
@@ -943,7 +943,7 @@ function getFrontendHtml() {
 
     const mascararCpf = (v) => {
       if (!v) return '';
-      const d = String(v).replace(/\D/g, '');
+      const d = String(v).replace(/[^0-9]/g, '');
       if (d.length !== 11) return v;
       // Oculta e deixa apenas os três primeiros e os últimos dígitos (Privacidade LGPD)
       return d.slice(0, 3) + '.***.***-' + d.slice(9);
@@ -1483,12 +1483,12 @@ function getFrontendHtml() {
 
       const validarCpf = (cpf) => {
         if (!cpf) return false;
-        const limpo = String(cpf).replace(/\D/g, '');
+        const limpo = String(cpf).replace(/[^0-9]/g, '');
         if (limpo.length !== 11) return false;
         return true;
       };
 
-      const cpfLimpo = cpfCadastro.replace(/\D/g, '');
+      const cpfLimpo = cpfCadastro.replace(/[^0-9]/g, '');
       const statusCpf = cpfLimpo.length === 11 ? (validarCpf(cpfCadastro) ? 'valido' : 'invalido') : null;
 
       const calcularForcaSenha = (senha, nome, email) => {
@@ -4677,7 +4677,7 @@ function getFrontendHtml() {
                           itens: carrinho.itens,
                           forma_pagamento: \`Cartão de Crédito (\${dadosCartao.parcelas}x)\`,
                           detalhes_pagamento: {
-                            ultimos_digitos: dadosCartao.numero.replace(/\D/g, '').slice(-4),
+                            ultimos_digitos: dadosCartao.numero.replace(/[^0-9]/g, '').slice(-4),
                             parcelas: dadosCartao.parcelas,
                             bandeira: 'Visa / Mastercard Platinum'
                           }
@@ -4707,8 +4707,8 @@ function getFrontendHtml() {
                         placeholder="0000 0000 0000 0000" 
                         value={dadosCartao.numero} 
                         onChange={(e) => {
-                          const v = e.target.value.replace(/\D/g, '').slice(0, 16);
-                          const formatted = v.replace(/(\d{4})(?=\d)/g, '$1 ');
+                          const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 16);
+                          const formatted = v.replace(/([0-9]{4})(?=[0-9])/g, '$1 ');
                           setDadosCartao({ ...dadosCartao, numero: formatted });
                         }} 
                         className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
@@ -4735,8 +4735,8 @@ function getFrontendHtml() {
                           placeholder="MM/AA" 
                           value={dadosCartao.validade} 
                           onChange={(e) => {
-                            const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                            const formatted = v.length > 2 ? \`\${v.slice(0, 2)}/\${v.slice(2)}\` : v;
+                            const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                            const formatted = v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v;
                             setDadosCartao({ ...dadosCartao, validade: formatted });
                           }} 
                           className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
@@ -4751,7 +4751,7 @@ function getFrontendHtml() {
                             maxLength={4} 
                             placeholder="•••" 
                             value={dadosCartao.cvv} 
-                            onChange={(e) => setDadosCartao({ ...dadosCartao, cvv: e.target.value.replace(/\D/g, '') })} 
+                            onChange={(e) => setDadosCartao({ ...dadosCartao, cvv: e.target.value.replace(/[^0-9]/g, '') })} 
                             className="w-full p-2.5 pr-8 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
                           />
                           {renderBotaoOlhoSenha(verCvvCartao, () => setVerCvvCartao(!verCvvCartao), "btn-ver-cvv-cartao")}
@@ -5447,7 +5447,7 @@ function getFrontendHtml() {
                             required 
                             maxLength="6"
                             value={codigoRecuperacao}
-                            onChange={(e) => setCodigoRecuperacao(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            onChange={(e) => setCodigoRecuperacao(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
                             placeholder="000000" 
                             className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 font-mono text-center tracking-[0.3em] text-sm text-ouro font-bold outline-none focus:border-ouro focus:ring-1 focus:ring-ouro/40" 
                           />

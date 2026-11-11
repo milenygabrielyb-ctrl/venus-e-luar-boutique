@@ -5063,13 +5063,18 @@ function getFrontendHtml() {
                     const email = emailCadastro;
                     const senha = senhaCadastro;
 
-                    if (!concordaTermosLgpd) {
-                      alert('Para criar sua conta, é obrigatório ler e concordar com os Documentos Legais e Políticas da Vênus & Luar (LGPD).');
+                    if (!cpf || cpf.trim().length === 0) {
+                      alert('O CPF é obrigatório para cadastrar sua conta exclusiva na boutique.');
                       return;
                     }
 
-                    if (cpf && cpf.trim().length > 0 && !validarCpf(cpf)) {
-                      alert('CPF incompleto ou inválido. Se desejar cadastrar seu CPF agora, digite os 11 dígitos numéricos válidos ou deixe o campo em branco (opcional).');
+                    if (!validarCpf(cpf)) {
+                      alert('CPF inválido ou incompleto. O CPF é obrigatório e deve conter os 11 dígitos numéricos válidos.');
+                      return;
+                    }
+
+                    if (!concordaTermosLgpd) {
+                      alert('Para criar sua conta, é obrigatório ler e concordar com os Documentos Legais e Políticas da Vênus & Luar (LGPD).');
                       return;
                     }
 
@@ -5175,10 +5180,12 @@ function getFrontendHtml() {
                       />
                     </div>
 
-                    {/* CPF (Coluna 1) - Opcional */}
+                    {/* CPF (Coluna 1) - Obrigatório */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-ouro uppercase tracking-wider">CPF (Opcional)</label>
+                        <label className="text-xs font-bold text-ouro uppercase tracking-wider">
+                          CPF <span className="text-ouro-light font-normal">(Obrigatório)</span>
+                        </label>
                         <div className="flex items-center gap-2">
                           {cpfCadastro && (
                             <button
@@ -5205,6 +5212,7 @@ function getFrontendHtml() {
                       <input 
                         id="input-cpf-cadastro"
                         name="cpf" 
+                        required
                         value={cpfCadastro}
                         onChange={(e) => setCpfCadastro(tratarDigitacaoCpf(e.target.value))}
                         inputMode="numeric"
@@ -5212,7 +5220,7 @@ function getFrontendHtml() {
                         autoCorrect="off"
                         spellCheck={false}
                         maxLength="14"
-                        placeholder="000.000.000-00 (Opcional)" 
+                        placeholder="000.000.000-00" 
                         className={"w-full px-3 py-2.5 rounded-xl bg-[#040711] border text-sm font-mono text-[#F8F5EB] placeholder-stone-500 outline-none transition-all " + (
                           statusCpf === 'valido' 
                             ? 'border-emerald-500 focus:border-emerald-400' 
@@ -5222,7 +5230,7 @@ function getFrontendHtml() {
                         )} 
                       />
                       <p className="text-[11px] text-[#C2B9A3] mt-1">
-                        Opcional. Após cadastrado, o CPF é protegido por criptografia e privacidade LGPD.
+                        Obrigatório. Protegido por criptografia e privacidade LGPD para faturamento e segurança.
                       </p>
                     </div>
 
@@ -9048,7 +9056,13 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         const { nome, email, senha, cpf, role, tipo_perfil, concorda_termos } = JSON.parse(body);
         if (!nome || !email || !senha) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail e Senha).' }));
+          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, CPF, E-mail e Senha).' }));
+          return;
+        }
+
+        if (!cpf || typeof cpf !== 'string' || cpf.trim().length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O CPF é obrigatório para realizar o cadastro na boutique.' }));
           return;
         }
 
@@ -9058,27 +9072,22 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        // CPF Opcional: só valida e formata se fornecido
-        let cpfFormatado = null;
-        if (cpf && typeof cpf === 'string' && cpf.trim().length > 0) {
-          const cpfLimpo = cpf.replace(/[^0-9]/g, '');
-          if (cpfLimpo.length > 0) {
-            if (!validarCpf(cpfLimpo)) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ 
-                erro: 'CPF inválido ou incompleto. Se optar por informar o CPF, ele deve conter 11 dígitos numéricos válidos.' 
-              }));
-              return;
-            }
-            // Bloqueio de duplicidade de CPF
-            if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
-              res.writeHead(409, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
-              return;
-            }
-            cpfFormatado = formatarCpf(cpfLimpo);
-          }
+        // CPF Obrigatório: validação rigorosa dos 11 dígitos numéricos
+        const cpfLimpo = cpf.replace(/[^0-9]/g, '');
+        if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            erro: 'CPF inválido ou incompleto. O CPF é obrigatório e deve conter 11 dígitos numéricos válidos.' 
+          }));
+          return;
         }
+        // Bloqueio de duplicidade de CPF
+        if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
+          return;
+        }
+        const cpfFormatado = formatarCpf(cpfLimpo);
 
         const emailNormalizado = email.trim().toLowerCase();
         if (usuarios.some(u => u.email.toLowerCase() === emailNormalizado)) {

@@ -930,6 +930,53 @@ function getFrontendHtml() {
     const formatBRL = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     // ==========================================
+    // UTILITÁRIOS UNIVERSAIS DE CPF (Resiliente e Sem Travamento)
+    // ==========================================
+    const formatarCpf = (v) => {
+      if (!v) return '';
+      const d = String(v).replace(/\D/g, '').slice(0, 11);
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
+      if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+      return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+    };
+
+    const tratarDigitacaoCpf = (valor) => {
+      if (!valor) return '';
+      const d = String(valor).replace(/\D/g, '').slice(0, 11);
+      return formatarCpf(d);
+    };
+
+    const handleCpfPaste = (setter) => (e) => {
+      e.preventDefault();
+      const texto = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      setter(tratarDigitacaoCpf(texto));
+    };
+
+    const handleCpfKeyDown = (setter) => (e) => {
+      if (e.key === 'Backspace') {
+        const input = e.target;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        if (start === end && start > 0) {
+          const charBefore = input.value[start - 1];
+          if (charBefore === '.' || charBefore === '-') {
+            e.preventDefault();
+            const val = input.value;
+            const novoValor = val.slice(0, start - 2) + val.slice(start);
+            setter(tratarDigitacaoCpf(novoValor));
+            setTimeout(() => {
+              try {
+                const novaPos = Math.max(0, start - 2);
+                input.setSelectionRange(novaPos, novaPos);
+              } catch (_) {}
+            }, 0);
+          }
+        }
+      }
+    };
+
+    // ==========================================
     // COMPONENTE PRINCIPAL (APP)
     // ==========================================
     function App() {
@@ -1452,13 +1499,6 @@ function getFrontendHtml() {
       const [senhaCadastro, setSenhaCadastro] = useState('');
       const [tipoPerfilCadastro, setTipoPerfilCadastro] = useState('cliente'); // 'cliente' | 'doador'
 
-      const formatarCpf = (v) => {
-        const d = (v || '').replace(/\D/g, '').slice(0, 11);
-        if (d.length <= 3) return d;
-        if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
-        if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
-        return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
-      };
 
       const validarCpf = (cpf) => {
         if (!cpf) return false;
@@ -3531,21 +3571,33 @@ function getFrontendHtml() {
                       <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
                         CPF Oficial
                       </label>
-                      {usuario.role === 'admin' ? (
-                        <span className="text-[10px] text-ouro font-semibold flex items-center gap-1">
-                          <span>✦</span>
-                          <span>Administradora (Edição Livre)</span>
-                        </span>
-                      ) : usuario.cpf_alterado ? (
-                        <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
-                          <span>🔒</span>
-                          <span>Bloqueado (1 alteração já realizada)</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-emerald-300 font-medium">
-                          ✦ Permite 1 alteração
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {perfilCpf && (usuario.role === 'admin' || !usuario.cpf_alterado) && (
+                          <button
+                            type="button"
+                            onClick={() => setPerfilCpf('')}
+                            className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                            title="Limpar campo para digitar CPF"
+                          >
+                            ✕ Limpar
+                          </button>
+                        )}
+                        {usuario.role === 'admin' ? (
+                          <span className="text-[10px] text-ouro font-semibold flex items-center gap-1">
+                            <span>✦</span>
+                            <span>Administradora (Edição Livre)</span>
+                          </span>
+                        ) : usuario.cpf_alterado ? (
+                          <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                            <span>🔒</span>
+                            <span>Bloqueado (1 alteração já realizada)</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-emerald-300 font-medium">
+                            ✦ Permite 1 alteração
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <input 
                       id="input-perfil-cpf"
@@ -3553,9 +3605,23 @@ function getFrontendHtml() {
                       value={perfilCpf} 
                       onChange={(e) => {
                         if (usuario.role === 'admin' || !usuario.cpf_alterado) {
-                          setPerfilCpf(formatarCpf(e.target.value));
+                          setPerfilCpf(tratarDigitacaoCpf(e.target.value));
                         }
                       }}
+                      onPaste={handleCpfPaste((val) => {
+                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
+                          setPerfilCpf(val);
+                        }
+                      })}
+                      onKeyDown={handleCpfKeyDown((val) => {
+                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
+                          setPerfilCpf(val);
+                        }
+                      })}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       disabled={usuario.role !== 'admin' && !!usuario.cpf_alterado}
                       maxLength="14"
                       placeholder="000.000.000-00" 
@@ -3762,13 +3828,31 @@ function getFrontendHtml() {
                   {/* CPF & Função */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
-                        CPF (Correção Administrativa)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
+                          CPF (Correção Administrativa)
+                        </label>
+                        {adminEditCpf && (
+                          <button
+                            type="button"
+                            onClick={() => setAdminEditCpf('')}
+                            className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                            title="Limpar campo para digitar CPF"
+                          >
+                            ✕ Limpar
+                          </button>
+                        )}
+                      </div>
                       <input 
                         name="admin_edit_cpf" 
                         value={adminEditCpf} 
-                        onChange={(e) => setAdminEditCpf(formatarCpf(e.target.value))} 
+                        onChange={(e) => setAdminEditCpf(tratarDigitacaoCpf(e.target.value))} 
+                        onPaste={handleCpfPaste(setAdminEditCpf)}
+                        onKeyDown={handleCpfKeyDown(setAdminEditCpf)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         maxLength="14"
                         placeholder="000.000.000-00" 
                         className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
@@ -3981,16 +4065,34 @@ function getFrontendHtml() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
-                        Seu CPF Oficial *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
+                          Seu CPF Oficial *
+                        </label>
+                        {petAdocaoCpf && (
+                          <button
+                            type="button"
+                            onClick={() => setPetAdocaoCpf('')}
+                            className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                            title="Limpar campo para digitar CPF"
+                          >
+                            ✕ Limpar
+                          </button>
+                        )}
+                      </div>
                       <input 
                         required 
                         value={petAdocaoCpf} 
-                        onChange={(e) => setPetAdocaoCpf(formatarCpf(e.target.value))} 
+                        onChange={(e) => setPetAdocaoCpf(tratarDigitacaoCpf(e.target.value))} 
+                        onPaste={handleCpfPaste(setPetAdocaoCpf)}
+                        onKeyDown={handleCpfKeyDown(setPetAdocaoCpf)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         placeholder="000.000.000-00" 
-                        maxLength={14}
-                        className={\`w-full p-3 rounded-xl bg-celestial-950 border text-xs text-luar-100 outline-none \${petAdocaoCpf ? (validarCpf(petAdocaoCpf) ? 'border-emerald-500' : 'border-rose-500') : 'border-ouro/30'}\`} 
+                        maxLength="14"
+                        className={"w-full p-3 rounded-xl bg-celestial-950 border text-xs text-luar-100 outline-none " + (petAdocaoCpf ? (validarCpf(petAdocaoCpf) ? 'border-emerald-500' : 'border-rose-500') : 'border-ouro/30')} 
                       />
                     </div>
                     <div>
@@ -4100,12 +4202,30 @@ function getFrontendHtml() {
                     <input name="nome" required placeholder="Ex: Ana Beatriz Moreira" className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">CPF do Tutor</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">CPF do Tutor</label>
+                      {registroAdocaoCpf && (
+                        <button
+                          type="button"
+                          onClick={() => setRegistroAdocaoCpf('')}
+                          className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                          title="Limpar campo para digitar CPF"
+                        >
+                          ✕ Limpar
+                        </button>
+                      )}
+                    </div>
                     <input 
                       name="cpf" 
                       required 
                       value={registroAdocaoCpf}
-                      onChange={(e) => setRegistroAdocaoCpf(formatarCpf(e.target.value))}
+                      onChange={(e) => setRegistroAdocaoCpf(tratarDigitacaoCpf(e.target.value))}
+                      onPaste={handleCpfPaste(setRegistroAdocaoCpf)}
+                      onKeyDown={handleCpfKeyDown(setRegistroAdocaoCpf)}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="000.000.000-00" 
                       maxLength="14"
                       className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
@@ -4451,15 +4571,33 @@ function getFrontendHtml() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-stone-400 mb-1">CPF para a Fatura</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-stone-400">CPF para a Fatura</label>
+                        {cpfCheckout && (
+                          <button
+                            type="button"
+                            onClick={() => setCpfCheckout('')}
+                            className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                            title="Limpar campo para digitar CPF"
+                          >
+                            ✕ Limpar
+                          </button>
+                        )}
+                      </div>
                       <input 
                         type="text" 
                         required 
                         value={cpfCheckout} 
-                        onChange={(e) => setCpfCheckout(formatarCpf(e.target.value))} 
+                        onChange={(e) => setCpfCheckout(tratarDigitacaoCpf(e.target.value))} 
+                        onPaste={handleCpfPaste(setCpfCheckout)}
+                        onKeyDown={handleCpfKeyDown(setCpfCheckout)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         placeholder="000.000.000-00" 
-                        maxLength={14}
-                        className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                        maxLength="14"
+                        className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
                       />
                     </div>
                   </div>
@@ -5106,22 +5244,40 @@ function getFrontendHtml() {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-ouro uppercase tracking-wider">CPF</label>
-                        {statusCpf === 'valido' && (
-                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                            ✓ Válido
-                          </span>
-                        )}
-                        {statusCpf === 'invalido' && (
-                          <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
-                            ✕ Inválido
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {cpfCadastro && (
+                            <button
+                              type="button"
+                              onClick={() => setCpfCadastro('')}
+                              className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                              title="Limpar campo para digitar CPF"
+                            >
+                              ✕ Limpar
+                            </button>
+                          )}
+                          {statusCpf === 'valido' && (
+                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                              ✓ Válido
+                            </span>
+                          )}
+                          {statusCpf === 'invalido' && (
+                            <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
+                              ✕ Inválido
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <input 
                         id="input-cpf-cadastro"
                         name="cpf" 
                         value={cpfCadastro}
-                        onChange={(e) => setCpfCadastro(formatarCpf(e.target.value))}
+                        onChange={(e) => setCpfCadastro(tratarDigitacaoCpf(e.target.value))}
+                        onPaste={handleCpfPaste(setCpfCadastro)}
+                        onKeyDown={handleCpfKeyDown(setCpfCadastro)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         required 
                         maxLength="14"
                         placeholder="000.000.000-00" 
@@ -6299,16 +6455,34 @@ function getFrontendHtml() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
-                              CPF (Válido / Receita Federal)
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
+                                CPF (Válido / Receita Federal)
+                              </label>
+                              {novoAdminCpf && (
+                                <button
+                                  type="button"
+                                  onClick={() => setNovoAdminCpf('')}
+                                  className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                                  title="Limpar campo para digitar CPF"
+                                >
+                                  ✕ Limpar
+                                </button>
+                              )}
+                            </div>
                             <input
                               type="text"
                               required
                               value={novoAdminCpf}
-                              onChange={(e) => setNovoAdminCpf(formatarCpf(e.target.value))}
+                              onChange={(e) => setNovoAdminCpf(tratarDigitacaoCpf(e.target.value))}
+                              onPaste={handleCpfPaste(setNovoAdminCpf)}
+                              onKeyDown={handleCpfKeyDown(setNovoAdminCpf)}
+                              inputMode="numeric"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
                               placeholder="000.000.000-00"
-                              maxLength={14}
+                              maxLength="14"
                               className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/40 text-xs text-[#F8F5EB] placeholder-stone-500 outline-none focus:border-ouro font-mono"
                             />
                           </div>

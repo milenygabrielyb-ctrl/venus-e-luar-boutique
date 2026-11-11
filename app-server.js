@@ -277,7 +277,7 @@ let usuarios = [
     id_usuario: 'usr_mileny_admin',
     nome_completo: 'Mileny Gabriely Bergamini Vieira',
     email: 'milenygabrielyb@gmail.com',
-    cpf: '614.709.260-08',
+    cpf: null,
     senha_hash: 'scrypt:16384:8:1:cc200f7e49e1bbf571e4afefc80b8fe2:53a39de31fa73bfacf52689c0dba4b7e34cf1a9b0861201c8bc6b5102668ac7773765f895b13a544706f3ad1a12190759ab8e38c139d61fe1f7438141ee16865',
     role: 'admin',
     criado_em: new Date().toISOString(),
@@ -930,7 +930,7 @@ function getFrontendHtml() {
     const formatBRL = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     // ==========================================
-    // UTILITÁRIOS UNIVERSAIS DE CPF (Resiliente e Sem Travamento)
+    // UTILITÁRIOS UNIVERSAIS DE CPF (Limpo, Resiliente e Fluido)
     // ==========================================
     const formatarCpf = (v) => {
       if (!v) return '';
@@ -941,39 +941,19 @@ function getFrontendHtml() {
       return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
     };
 
+    const mascararCpf = (v) => {
+      if (!v) return '';
+      const d = String(v).replace(/\D/g, '');
+      if (d.length !== 11) return v;
+      // Oculta e deixa apenas os três primeiros e os últimos dígitos (Privacidade LGPD)
+      return d.slice(0, 3) + '.***.***-' + d.slice(9);
+    };
+    window.mascararCpf = mascararCpf;
+    window.formatarCpf = formatarCpf;
+
     const tratarDigitacaoCpf = (valor) => {
       if (!valor) return '';
-      const d = String(valor).replace(/\D/g, '').slice(0, 11);
-      return formatarCpf(d);
-    };
-
-    const handleCpfPaste = (setter) => (e) => {
-      e.preventDefault();
-      const texto = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-      setter(tratarDigitacaoCpf(texto));
-    };
-
-    const handleCpfKeyDown = (setter) => (e) => {
-      if (e.key === 'Backspace') {
-        const input = e.target;
-        const start = input.selectionStart;
-        const end = input.selectionEnd;
-        if (start === end && start > 0) {
-          const charBefore = input.value[start - 1];
-          if (charBefore === '.' || charBefore === '-') {
-            e.preventDefault();
-            const val = input.value;
-            const novoValor = val.slice(0, start - 2) + val.slice(start);
-            setter(tratarDigitacaoCpf(novoValor));
-            setTimeout(() => {
-              try {
-                const novaPos = Math.max(0, start - 2);
-                input.setSelectionRange(novaPos, novaPos);
-              } catch (_) {}
-            }, 0);
-          }
-        }
-      }
+      return formatarCpf(valor);
     };
 
     // ==========================================
@@ -1091,6 +1071,7 @@ function getFrontendHtml() {
       const [adminEditCpfAlterado, setAdminEditCpfAlterado] = useState(false);
       const [uploadingFotoAdminEdit, setUploadingFotoAdminEdit] = useState(false);
       const [salvandoEdicaoAdminUsuario, setSalvandoEdicaoAdminUsuario] = useState(false);
+      const [cpfsRevelados, setCpfsRevelados] = useState({});
 
       // Estados para Cadastro Simplificado de Peças (Seletores Intuitivos sem JSON manual)
       const [categoriaNovoProduto, setCategoriaNovoProduto] = useState('Moda');
@@ -3565,14 +3546,21 @@ function getFrontendHtml() {
                     />
                   </div>
 
-                  {/* CPF com Trava de 1 Alteração */}
+                  {/* CPF Oficial com Privacidade LGPD e Opcionalidade */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
-                        CPF Oficial
-                      </label>
                       <div className="flex items-center gap-2">
-                        {perfilCpf && (usuario.role === 'admin' || !usuario.cpf_alterado) && (
+                        <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                          CPF (Opcional)
+                        </label>
+                        {perfilCpf && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40" title="Proteção de Privacidade LGPD">
+                            LGPD: {mascararCpf(perfilCpf)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {perfilCpf && (
                           <button
                             type="button"
                             onClick={() => setPerfilCpf('')}
@@ -3582,68 +3570,24 @@ function getFrontendHtml() {
                             ✕ Limpar
                           </button>
                         )}
-                        {usuario.role === 'admin' ? (
-                          <span className="text-[10px] text-ouro font-semibold flex items-center gap-1">
-                            <span>✦</span>
-                            <span>Administradora (Edição Livre)</span>
-                          </span>
-                        ) : usuario.cpf_alterado ? (
-                          <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
-                            <span>🔒</span>
-                            <span>Bloqueado (1 alteração já realizada)</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-emerald-300 font-medium">
-                            ✦ Permite 1 alteração
-                          </span>
-                        )}
                       </div>
                     </div>
                     <input 
                       id="input-perfil-cpf"
                       name="perfil_cpf" 
                       value={perfilCpf} 
-                      onChange={(e) => {
-                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
-                          setPerfilCpf(tratarDigitacaoCpf(e.target.value));
-                        }
-                      }}
-                      onPaste={handleCpfPaste((val) => {
-                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
-                          setPerfilCpf(val);
-                        }
-                      })}
-                      onKeyDown={handleCpfKeyDown((val) => {
-                        if (usuario.role === 'admin' || !usuario.cpf_alterado) {
-                          setPerfilCpf(val);
-                        }
-                      })}
+                      onChange={(e) => setPerfilCpf(tratarDigitacaoCpf(e.target.value))}
                       inputMode="numeric"
                       autoComplete="off"
                       autoCorrect="off"
                       spellCheck={false}
-                      disabled={usuario.role !== 'admin' && !!usuario.cpf_alterado}
                       maxLength="14"
-                      placeholder="000.000.000-00" 
-                      className={"w-full p-3 rounded-xl text-xs font-mono outline-none " + (
-                        (usuario.role !== 'admin' && usuario.cpf_alterado)
-                          ? 'bg-celestial-950/60 border border-stone-700/60 text-stone-400 cursor-not-allowed'
-                          : 'bg-celestial-950 border border-ouro/30 text-luar-100 focus:border-ouro'
-                      )} 
+                      placeholder="000.000.000-00 (Opcional)" 
+                      className="w-full p-3 rounded-xl text-xs font-mono outline-none bg-celestial-950 border border-ouro/30 text-luar-100 focus:border-ouro" 
                     />
-                    {usuario.role === 'admin' ? (
-                      <p className="text-[10.5px] text-ouro/70 mt-1">
-                        Como administradora, você pode alterar e atualizar seu CPF a qualquer momento.
-                      </p>
-                    ) : usuario.cpf_alterado ? (
-                      <p className="text-[10.5px] text-stone-400 mt-1">
-                        Por motivos de segurança e integridade cadastral, o CPF foi bloqueado após a primeira retificação. Para alterações adicionais, solicite suporte à administração.
-                      </p>
-                    ) : (
-                      <p className="text-[10.5px] text-ouro/70 mt-1">
-                        Atenção: Você pode cadastrar ou alterar seu CPF apenas 1 vez pelo autoatendimento.
-                      </p>
-                    )}
+                    <p className="text-[10.5px] text-luar-300/80 mt-1">
+                      Campo opcional. Você pode cadastrar, atualizar ou retificar seu CPF a qualquer momento.
+                    </p>
                   </div>
 
                   {/* Senha */}
@@ -3829,9 +3773,16 @@ function getFrontendHtml() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
-                          CPF (Correção Administrativa)
-                        </label>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
+                            CPF (Correção Administrativa)
+                          </label>
+                          {adminEditCpf && (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40" title="Proteção de Privacidade LGPD">
+                              LGPD: {mascararCpf(adminEditCpf)}
+                            </span>
+                          )}
+                        </div>
                         {adminEditCpf && (
                           <button
                             type="button"
@@ -3847,14 +3798,12 @@ function getFrontendHtml() {
                         name="admin_edit_cpf" 
                         value={adminEditCpf} 
                         onChange={(e) => setAdminEditCpf(tratarDigitacaoCpf(e.target.value))} 
-                        onPaste={handleCpfPaste(setAdminEditCpf)}
-                        onKeyDown={handleCpfKeyDown(setAdminEditCpf)}
                         inputMode="numeric"
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
                         maxLength="14"
-                        placeholder="000.000.000-00" 
+                        placeholder="000.000.000-00 (Opcional)" 
                         className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
                       />
                     </div>
@@ -3873,23 +3822,6 @@ function getFrontendHtml() {
                         <option value="admin">Administradora</option>
                       </select>
                     </div>
-                  </div>
-
-                  {/* Trava de Alteração de CPF */}
-                  <div className="p-3 rounded-xl bg-celestial-950/90 border border-ouro/30 flex items-center justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-ouro">Trava de Alteração de CPF do Usuário</span>
-                      <span className="block text-[10.5px] text-luar-300">
-                        {adminEditCpfAlterado ? 'O usuário já atingiu o limite de 1 alteração.' : 'O usuário ainda tem direito a 1 alteração.'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAdminEditCpfAlterado(!adminEditCpfAlterado)}
-                      className={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer " + (adminEditCpfAlterado ? 'bg-amber-950/80 border border-amber-500 text-amber-300' : 'bg-emerald-950/80 border border-emerald-500 text-emerald-300')}
-                    >
-                      {adminEditCpfAlterado ? '🔒 Travado (1 usada)' : '🔓 Liberado para 1x'}
-                    </button>
                   </div>
 
                   {/* Redefinição de Senha */}
@@ -4084,8 +4016,6 @@ function getFrontendHtml() {
                         required 
                         value={petAdocaoCpf} 
                         onChange={(e) => setPetAdocaoCpf(tratarDigitacaoCpf(e.target.value))} 
-                        onPaste={handleCpfPaste(setPetAdocaoCpf)}
-                        onKeyDown={handleCpfKeyDown(setPetAdocaoCpf)}
                         inputMode="numeric"
                         autoComplete="off"
                         autoCorrect="off"
@@ -4220,8 +4150,6 @@ function getFrontendHtml() {
                       required 
                       value={registroAdocaoCpf}
                       onChange={(e) => setRegistroAdocaoCpf(tratarDigitacaoCpf(e.target.value))}
-                      onPaste={handleCpfPaste(setRegistroAdocaoCpf)}
-                      onKeyDown={handleCpfKeyDown(setRegistroAdocaoCpf)}
                       inputMode="numeric"
                       autoComplete="off"
                       autoCorrect="off"
@@ -4589,8 +4517,6 @@ function getFrontendHtml() {
                         required 
                         value={cpfCheckout} 
                         onChange={(e) => setCpfCheckout(tratarDigitacaoCpf(e.target.value))} 
-                        onPaste={handleCpfPaste(setCpfCheckout)}
-                        onKeyDown={handleCpfKeyDown(setCpfCheckout)}
                         inputMode="numeric"
                         autoComplete="off"
                         autoCorrect="off"
@@ -5134,8 +5060,8 @@ function getFrontendHtml() {
                     const email = emailCadastro;
                     const senha = senhaCadastro;
 
-                    if (!validarCpf(cpf)) {
-                      alert('CPF inválido. Por favor, insira um CPF oficial válido para cadastro.');
+                    if (cpf && cpf.trim().length > 0 && !validarCpf(cpf)) {
+                      alert('CPF incompleto ou inválido. Se desejar cadastrar seu CPF agora, digite os 11 dígitos numéricos válidos ou deixe o campo em branco (opcional).');
                       return;
                     }
 
@@ -5240,10 +5166,10 @@ function getFrontendHtml() {
                       />
                     </div>
 
-                    {/* CPF (Coluna 1) */}
+                    {/* CPF (Coluna 1) - Opcional */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-ouro uppercase tracking-wider">CPF</label>
+                        <label className="text-xs font-bold text-ouro uppercase tracking-wider">CPF (Opcional)</label>
                         <div className="flex items-center gap-2">
                           {cpfCadastro && (
                             <button
@@ -5272,16 +5198,13 @@ function getFrontendHtml() {
                         name="cpf" 
                         value={cpfCadastro}
                         onChange={(e) => setCpfCadastro(tratarDigitacaoCpf(e.target.value))}
-                        onPaste={handleCpfPaste(setCpfCadastro)}
-                        onKeyDown={handleCpfKeyDown(setCpfCadastro)}
                         inputMode="numeric"
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
-                        required 
                         maxLength="14"
-                        placeholder="000.000.000-00" 
-                        className={"w-full px-3 py-2.5 rounded-xl bg-[#040711] border text-sm font-mono text-[#F8F5EB] placeholder-stone-400 outline-none transition-all " + (
+                        placeholder="000.000.000-00 (Opcional)" 
+                        className={"w-full px-3 py-2.5 rounded-xl bg-[#040711] border text-sm font-mono text-[#F8F5EB] placeholder-stone-500 outline-none transition-all " + (
                           statusCpf === 'valido' 
                             ? 'border-emerald-500 focus:border-emerald-400' 
                             : statusCpf === 'invalido'
@@ -5290,7 +5213,7 @@ function getFrontendHtml() {
                         )} 
                       />
                       <p className="text-[11px] text-[#C2B9A3] mt-1">
-                        Para identificação exclusiva do cliente.
+                        Opcional. Após cadastrado, o CPF é protegido por criptografia e privacidade LGPD.
                       </p>
                     </div>
 
@@ -6396,6 +6319,10 @@ function getFrontendHtml() {
                       <form
                         onSubmit={async (e) => {
                           e.preventDefault();
+                          if (novoAdminCpf && !validarCpf(novoAdminCpf)) {
+                            alert('Se informado, o CPF deve atender ao Módulo 11 da Receita Federal.');
+                            return;
+                          }
                           setCriandoAdmin(true);
                           try {
                             const res = await fetch('/api/admin/criar-admin', {
@@ -6457,7 +6384,7 @@ function getFrontendHtml() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-[11px] font-bold text-ouro uppercase tracking-wider">
-                                CPF (Válido / Receita Federal)
+                                CPF (Opcional)
                               </label>
                               {novoAdminCpf && (
                                 <button
@@ -6472,16 +6399,13 @@ function getFrontendHtml() {
                             </div>
                             <input
                               type="text"
-                              required
                               value={novoAdminCpf}
                               onChange={(e) => setNovoAdminCpf(tratarDigitacaoCpf(e.target.value))}
-                              onPaste={handleCpfPaste(setNovoAdminCpf)}
-                              onKeyDown={handleCpfKeyDown(setNovoAdminCpf)}
                               inputMode="numeric"
                               autoComplete="off"
                               autoCorrect="off"
                               spellCheck={false}
-                              placeholder="000.000.000-00"
+                              placeholder="000.000.000-00 (Opcional)"
                               maxLength="14"
                               className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/40 text-xs text-[#F8F5EB] placeholder-stone-500 outline-none focus:border-ouro font-mono"
                             />
@@ -6564,20 +6488,22 @@ function getFrontendHtml() {
                                   <span className={"text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full " + (u.role === 'admin' ? 'bg-ouro/20 text-ouro border border-ouro/40' : u.role === 'doador' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40' : 'bg-celestial-900 text-luar-300 border border-ouro/20')}>
                                     {u.role === 'admin' ? 'Administradora' : (u.role === 'doador' ? '🐾 Doador de Pets' : 'Cliente')}
                                   </span>
-                                  {u.cpf && (
-                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40 shadow-sm">
-                                      CPF: {u.cpf}
+                                  {u.cpf ? (
+                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40 shadow-sm inline-flex items-center gap-1">
+                                      <span>CPF: {cpfsRevelados[u.id_usuario] ? u.cpf : mascararCpf(u.cpf)}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setCpfsRevelados(prev => ({ ...prev, [u.id_usuario]: !prev[u.id_usuario] }));
+                                        }}
+                                        className="text-[10px] text-ouro/70 hover:text-ouro ml-0.5 transition-colors cursor-pointer"
+                                        title={cpfsRevelados[u.id_usuario] ? "Ocultar CPF" : "Visualizar CPF completo"}
+                                      >
+                                        {cpfsRevelados[u.id_usuario] ? '🙈' : '👁️'}
+                                      </button>
                                     </span>
-                                  )}
-                                  {u.cpf_alterado ? (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm" title="CPF já foi alterado pelo usuário (travado para autoatendimento)">
-                                      🔒 CPF Travado (1x)
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm" title="CPF liberado para edição pelo usuário">
-                                      🔓 CPF Livre (1x)
-                                    </span>
-                                  )}
+                                  ) : null}
                                 </div>
                                 <span className="text-[11px] text-luar-300/80 block mt-0.5">{u.email}</span>
                               </div>
@@ -8073,22 +7999,13 @@ const server = http.createServer((req, res) => {
           user.foto_perfil = foto_perfil || null;
         }
 
-        // 4. CPF (REGRA: O PRÓPRIO USUÁRIO PODE ALTERAR O CPF APENAS 1 VEZ; ADMIN NUNCA É BLOQUEADO)
+        // 4. CPF (Livre para qualquer usuário cadastrar ou alterar seu próprio CPF)
         if (cpf !== undefined && cpf !== null && typeof cpf === 'string') {
           const cpfLimpo = cpf.replace(/\D/g, '');
           const cpfAtualLimpo = (user.cpf || '').replace(/\D/g, '');
           
           if (cpfLimpo !== cpfAtualLimpo) {
             if (cpfLimpo.length > 0) {
-              // Se não for admin e o usuário já alterou o CPF anteriormente, bloqueia
-              if (user.role !== 'admin' && user.cpf_alterado) {
-                res.writeHead(403, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                  erro: 'O CPF só pode ser alterado uma única vez pelo próprio usuário. Para novas retificações, contate o administrador da boutique.' 
-                }));
-                return;
-              }
-
               if (!validarCpf(cpfLimpo)) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ erro: 'O CPF deve conter exatamente 11 dígitos numéricos.' }));
@@ -8103,10 +8020,7 @@ const server = http.createServer((req, res) => {
               }
 
               user.cpf = formatarCpf(cpfLimpo);
-              if (user.role !== 'admin') {
-                user.cpf_alterado = true;
-              }
-            } else if (user.role === 'admin') {
+            } else {
               user.cpf = null;
             }
           }
@@ -8216,6 +8130,7 @@ const server = http.createServer((req, res) => {
             user.cpf = formatarCpf(cpfLimpo);
           } else {
             user.cpf = null;
+            user.cpf_alterado = false;
           }
         }
 
@@ -8289,25 +8204,28 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { nome, email, senha, cpf } = JSON.parse(body);
-        if (!nome || !email || !senha || !cpf) {
+        if (!nome || !email || !senha) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, CPF, E-mail e Senha).' }));
+          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail e Senha).' }));
           return;
         }
 
-        if (!validarCpf(cpf)) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'CPF inválido ou fictício. O CPF deve atender ao Módulo 11 da Receita Federal.' }));
-          return;
-        }
-
-        const cpfLimpo = cpf.replace(/\D/g, '');
-        const cpfFormatado = formatarCpf(cpfLimpo);
-
-        if (usuarios.some(u => u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
-          res.writeHead(409, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Já existe uma conta cadastrada com este CPF.' }));
-          return;
+        let cpfFormatado = null;
+        if (cpf && typeof cpf === 'string' && cpf.trim().length > 0) {
+          const cpfLimpo = cpf.replace(/\D/g, '');
+          if (cpfLimpo.length > 0) {
+            if (!validarCpf(cpfLimpo)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'CPF inválido. Se informado, o CPF deve atender ao Módulo 11 da Receita Federal.' }));
+              return;
+            }
+            if (usuarios.some(u => u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Já existe uma conta cadastrada com este CPF.' }));
+              return;
+            }
+            cpfFormatado = formatarCpf(cpfLimpo);
+          }
         }
 
         const emailNormalizado = email.trim().toLowerCase();
@@ -8846,29 +8764,32 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     req.on('end', () => {
       try {
         const { nome, email, senha, cpf, role, tipo_perfil } = JSON.parse(body);
-        if (!nome || !email || !senha || !cpf) {
+        if (!nome || !email || !senha) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, CPF, E-mail e Senha).' }));
+          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail e Senha).' }));
           return;
         }
 
-        // Validação Estrita de CPF (proibindo CPFs fictícios ou com dígitos inválidos)
-        if (!validarCpf(cpf)) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ 
-            erro: 'CPF inválido ou fictício. O CPF deve ser válido (Módulo 11 da Receita Federal) para identificação exclusiva do cliente.' 
-          }));
-          return;
-        }
-
-        const cpfLimpo = cpf.replace(/\D/g, '');
-        const cpfFormatado = formatarCpf(cpfLimpo);
-
-        // Bloqueio de duplicidade de CPF
-        if (usuarios.some(u => u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
-          res.writeHead(409, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
-          return;
+        // CPF Opcional: só valida e formata se fornecido
+        let cpfFormatado = null;
+        if (cpf && typeof cpf === 'string' && cpf.trim().length > 0) {
+          const cpfLimpo = cpf.replace(/\D/g, '');
+          if (cpfLimpo.length > 0) {
+            if (!validarCpf(cpfLimpo)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                erro: 'CPF inválido ou incompleto. Se optar por informar o CPF, ele deve conter 11 dígitos numéricos válidos.' 
+              }));
+              return;
+            }
+            // Bloqueio de duplicidade de CPF
+            if (usuarios.some(u => u.cpf && u.cpf.replace(/\D/g, '') === cpfLimpo)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
+              return;
+            }
+            cpfFormatado = formatarCpf(cpfLimpo);
+          }
         }
 
         const emailNormalizado = email.trim().toLowerCase();

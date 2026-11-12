@@ -2006,7 +2006,7 @@ function getFrontendHtml() {
                     id="btn-gestao-header"
                     onClick={handleAbrirGestao}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-ouro/50 bg-celestial-950/80 text-ouro hover:bg-ouro hover:text-celestial-950 text-[10.5px] sm:text-xs font-semibold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-sm group whitespace-nowrap"
-                    title={usuario?.role === 'admin' ? 'Painel de Gestão e Catálogo (Administrador)' : 'Painel do Doador de Pets'}
+                    title={usuario?.role === 'admin' ? 'Painel de Gestão e Catálogo (Administrador)' : 'Painel de Gestão de Pets'}
                   >
                     {usuario && usuario.role !== 'admin' ? (
                       <span className="text-xs">🐾</span>
@@ -2039,7 +2039,7 @@ function getFrontendHtml() {
                           </div>
                         )}
                         <span className="text-[10px] uppercase tracking-wider font-bold text-ouro">
-                          {usuario.role === 'admin' ? 'Admin' : 'Cliente & Doador'}
+                          {usuario.role === 'admin' ? 'Admin' : 'Usuário'}
                         </span>
                         {usuario.nome && usuario.nome.toLowerCase() !== 'administradora' && usuario.nome.toLowerCase() !== 'admin' && (
                           <span className="text-[10.5px] text-luar-100 font-serif font-medium pl-0.5 max-w-[80px] truncate hidden md:inline">
@@ -2535,7 +2535,7 @@ function getFrontendHtml() {
                   const json = await res.json();
                   if (res.ok) {
                     if (json.usuario.role !== 'admin') {
-                      alert('Esta conta é de cliente comum. Apenas Administradores podem adicionar roupas no sistema.');
+                      alert('Esta conta é de usuário. Apenas Administradoras podem adicionar roupas no sistema.');
                       return;
                     }
                     handleLoginAdminSucesso(json.usuario, json.token);
@@ -3846,8 +3846,7 @@ function getFrontendHtml() {
                         onChange={(e) => setAdminEditRole(e.target.value)}
                         className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro cursor-pointer"
                       >
-                        <option value="cliente">Cliente (Consumidor)</option>
-                        <option value="doador">Doador de Pets</option>
+                        <option value="cliente">Usuário</option>
                         <option value="admin">Administradora</option>
                       </select>
                     </div>
@@ -4964,7 +4963,7 @@ function getFrontendHtml() {
                       {abaAuthGeral === 'login' 
                         ? 'Acesse sua conta para compras, pedidos e sacola' 
                         : abaAuthGeral === 'cadastro'
-                        ? 'Cadastro exclusivo unificado para clientes, compras e doação de pets'
+                        ? 'Cadastro exclusivo de usuário para compras, bistrô e doação de pets'
                         : 'Recuperação de acesso da sua conta'}
                     </p>
                   </div>
@@ -5121,23 +5120,23 @@ function getFrontendHtml() {
                       setEmailCadastro('');
                       setSenhaCadastro('');
                       setConcordaTermosLgpd(false);
-                      mostrarNotificacao('Conta criada com sucesso! Bem-vinda à Vênus e Luar, ' + json.usuario.nome.split(' ')[0] + '! Você já pode comprar e doar pets.');
+                      mostrarNotificacao('Conta de usuário criada com sucesso! Bem-vinda à Vênus e Luar, ' + json.usuario.nome.split(' ')[0] + '!');
                     } else {
                       alert(json.erro || 'Falha no cadastro');
                     }
                   }} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 relative z-10">
 
-                    {/* Perfil Unificado: Cliente & Doador de Pets */}
+                    {/* Perfil Unificado: Usuário */}
                     <div className="sm:col-span-2 p-3.5 rounded-2xl bg-celestial-950/90 border border-ouro/40 flex items-center gap-3.5 shadow-inner">
                       <div className="w-11 h-11 rounded-xl bg-ouro/20 border border-ouro/40 flex items-center justify-center text-xl shrink-0 shadow-sm">
                         ✨
                       </div>
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-ouro block tracking-wide">
-                          Conta Exclusiva Completa: Cliente &amp; Doador de Pets
+                          Conta Exclusiva de Usuário
                         </span>
                         <p className="text-[11px] text-[#C2B9A3] leading-relaxed">
-                          Com este cadastro único você pode realizar compras na boutique, fazer reservas no bistrô e também cadastrar e doar animais para adoção responsável.
+                          Com este cadastro você pode realizar compras na boutique, fazer reservas no bistrô e também cadastrar e doar animais para adoção responsável.
                         </p>
                       </div>
                     </div>
@@ -5824,11 +5823,11 @@ function getFrontendHtml() {
                   </div>
                   <div>
                     <h3 className="font-serif text-2xl font-bold gold-gradient-text">
-                      {usuario?.role !== 'admin' ? 'Painel do Doador de Pets' : 'Painel de Gestão da Boutique'}
+                      {usuario?.role !== 'admin' ? 'Painel de Gestão de Pets' : 'Painel de Gestão da Boutique'}
                     </h3>
                     <span className="text-[11px] text-emerald-400 font-semibold">
                       {usuario?.role !== 'admin' 
-                        ? '✓ Sessão de Cliente & Doador Verificada • Gestão exclusiva dos seus animais' 
+                        ? '✓ Sessão de Usuário Verificada • Gestão exclusiva dos seus animais' 
                         : '✓ Sessão de Administradora Verificada'}
                     </span>
                   </div>
@@ -6736,8 +6735,8 @@ function getFrontendHtml() {
                               <div>
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span className="text-xs font-bold text-ouro-light">{u.nome_completo}</span>
-                                  <span className={"text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full " + (u.role === 'admin' ? 'bg-ouro/20 text-ouro border border-ouro/40' : u.role === 'doador' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40' : 'bg-celestial-900 text-luar-300 border border-ouro/20')}>
-                                    {u.role === 'admin' ? 'Administradora' : (u.role === 'doador' ? '🐾 Doador de Pets' : 'Cliente')}
+                                  <span className={"text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full " + (u.role === 'admin' ? 'bg-ouro/20 text-ouro border border-ouro/40' : 'bg-celestial-900 text-luar-300 border border-ouro/20')}>
+                                    {u.role === 'admin' ? 'Administradora' : 'Usuário'}
                                   </span>
                                   {u.cpf ? (
                                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-ouro/15 text-ouro border border-ouro/40 shadow-sm inline-flex items-center gap-1">
@@ -8749,7 +8748,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         const criadorUsuario = usuarios.find(u => u.id_usuario === payload.id_usuario);
         const criadorNome = criadorUsuario 
           ? criadorUsuario.nome_completo 
-          : (payload.role === 'admin' ? 'Administradora Vênus e Luar' : 'Doador Responsável');
+          : (payload.role === 'admin' ? 'Administradora Vênus e Luar' : 'Usuário Responsável');
 
         const novoPet = {
           id_pet: pets.length > 0 ? Math.max(...pets.map(p => p.id_pet)) + 1 : 1,
@@ -9073,7 +9072,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         // Bloqueio de duplicidade de CPF
         if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
           res.writeHead(409, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada cliente deve possuir conta exclusiva.' }));
+          res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada usuário deve possuir conta exclusiva.' }));
           return;
         }
         const cpfFormatado = formatarCpf(cpfLimpo);

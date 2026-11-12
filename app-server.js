@@ -1793,18 +1793,19 @@ function getFrontendHtml() {
       // REGRA 1 DE PERMISSIONAMENTO: BLOQUEIA ADICIONAR/CADASTRAR ROUPAS (GESTÃO)
       // ================================================================
       const handleAbrirGestao = () => {
-        // Se NÃO estiver logado como administrador ou doador, abre o modal de permissionamento
-        if (!usuario || (usuario.role !== 'admin' && usuario.role !== 'doador')) {
+        // Se NÃO estiver logado, abre o modal de acesso administrativo/login
+        if (!usuario) {
           setIsPermissionamentoGestaoOpen(true);
           return;
         }
-        if (usuario.role === 'doador') {
+        if (usuario.role === 'admin') {
+          setAbaGestao('cadastrar');
+          carregarUsuarios();
+        } else {
+          // Cliente também é doador de pets: abre diretamente o painel de doação
           setAbaGestao('pets');
           setSubAbaPetsAdmin('lista');
           carregarCandidaturasAdmin();
-        } else {
-          setAbaGestao('cadastrar');
-          carregarUsuarios();
         }
         setIsAdminOpen(true);
       };
@@ -2005,12 +2006,16 @@ function getFrontendHtml() {
                     id="btn-gestao-header"
                     onClick={handleAbrirGestao}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-ouro/50 bg-celestial-950/80 text-ouro hover:bg-ouro hover:text-celestial-950 text-[10.5px] sm:text-xs font-semibold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-sm group whitespace-nowrap"
-                    title={usuario?.role === 'doador' ? 'Painel do Doador de Pets' : 'Painel de Gestão e Catálogo (Administrador)'}
+                    title={usuario?.role === 'admin' ? 'Painel de Gestão e Catálogo (Administrador)' : 'Painel do Doador de Pets'}
                   >
-                    <svg className="w-3.5 h-3.5 stroke-current transition-transform duration-200 group-hover:rotate-45" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                    </svg>
-                    <span className="hidden sm:inline">{usuario?.role === 'doador' ? 'Doador' : 'Gestão'}</span>
+                    {usuario && usuario.role !== 'admin' ? (
+                      <span className="text-xs">🐾</span>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 stroke-current transition-transform duration-200 group-hover:rotate-45" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                      </svg>
+                    )}
+                    <span className="hidden sm:inline">{usuario?.role === 'admin' ? 'Gestão' : (usuario ? 'Doar Pet' : 'Gestão')}</span>
                   </button>
 
                   {usuario ? (
@@ -2034,7 +2039,7 @@ function getFrontendHtml() {
                           </div>
                         )}
                         <span className="text-[10px] uppercase tracking-wider font-bold text-ouro">
-                          {usuario.role === 'admin' ? 'Admin' : (usuario.role === 'doador' ? 'Doador' : 'Cliente')}
+                          {usuario.role === 'admin' ? 'Admin' : 'Cliente & Doador'}
                         </span>
                         {usuario.nome && usuario.nome.toLowerCase() !== 'administradora' && usuario.nome.toLowerCase() !== 'admin' && (
                           <span className="text-[10.5px] text-luar-100 font-serif font-medium pl-0.5 max-w-[80px] truncate hidden md:inline">
@@ -2237,12 +2242,33 @@ function getFrontendHtml() {
                       ))}
                     </div>
                   </div>
-                  <div 
-                    style={{ backgroundColor: '#080E1E', borderColor: 'rgba(223, 177, 91, 0.5)' }}
-                    className="px-5 py-3 rounded-xl border text-center shadow-lg flex-shrink-0"
-                  >
-                    <span className="text-2xl font-serif font-bold text-ouro block">{pets.filter(p => p.status === 'Disponível').length}</span>
-                    <span className="text-[11px] font-semibold text-luar-200">Disponíveis</span>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full md:w-auto">
+                    <div 
+                      style={{ backgroundColor: '#080E1E', borderColor: 'rgba(223, 177, 91, 0.5)' }}
+                      className="px-5 py-3 rounded-xl border text-center shadow-lg w-full sm:w-auto"
+                    >
+                      <span className="text-2xl font-serif font-bold text-ouro block">{pets.filter(p => p.status === 'Disponível').length}</span>
+                      <span className="text-[11px] font-semibold text-luar-200">Disponíveis</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      id="btn-quero-doar-pet"
+                      onClick={() => {
+                        if (!usuario) {
+                          setAbaAuthGeral('cadastro');
+                          setIsAuthOpen(true);
+                        } else {
+                          setAbaGestao('pets');
+                          setSubAbaPetsAdmin('novo');
+                          carregarCandidaturasAdmin();
+                          setIsAdminOpen(true);
+                        }
+                      }}
+                      className="w-full sm:w-auto px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 hover:brightness-110 active:scale-95"
+                    >
+                      <span>🐾 Quero Doar um Pet</span>
+                    </button>
                   </div>
                 </div>
 
@@ -4938,7 +4964,7 @@ function getFrontendHtml() {
                       {abaAuthGeral === 'login' 
                         ? 'Acesse sua conta para compras, pedidos e sacola' 
                         : abaAuthGeral === 'cadastro'
-                        ? 'Cadastro exclusivo para clientes, adotantes e doadores'
+                        ? 'Cadastro exclusivo unificado para clientes, compras e doação de pets'
                         : 'Recuperação de acesso da sua conta'}
                     </p>
                   </div>
@@ -5081,7 +5107,7 @@ function getFrontendHtml() {
                     const res = await fetch('/api/auth/registrar', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ nome, cpf, email, senha, role: tipoPerfilCadastro, concorda_termos: concordaTermosLgpd })
+                      body: JSON.stringify({ nome, cpf, email, senha, role: 'cliente', concorda_termos: concordaTermosLgpd })
                     });
                     const json = await res.json();
                     if (res.ok) {
@@ -5095,62 +5121,25 @@ function getFrontendHtml() {
                       setEmailCadastro('');
                       setSenhaCadastro('');
                       setConcordaTermosLgpd(false);
-                      if (json.usuario.role === 'doador') {
-                        mostrarNotificacao('Conta de Doador criada com sucesso! Acesse o Painel do Doador para cadastrar seus pets.');
-                      } else {
-                        mostrarNotificacao('Conta criada com sucesso! Bem-vinda à Vênus e Luar, ' + json.usuario.nome.split(' ')[0] + '!');
-                      }
+                      mostrarNotificacao('Conta criada com sucesso! Bem-vinda à Vênus e Luar, ' + json.usuario.nome.split(' ')[0] + '! Você já pode comprar e doar pets.');
                     } else {
                       alert(json.erro || 'Falha no cadastro');
                     }
                   }} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 relative z-10">
 
-                    {/* Tipo de Perfil (Ocupa 2 colunas) */}
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="block text-xs font-bold text-ouro uppercase tracking-wider">Tipo de Cadastro</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setTipoPerfilCadastro('cliente')}
-                          style={tipoPerfilCadastro === 'cliente' ? {
-                            background: 'linear-gradient(135deg, #FFE8A3 0%, #DFB15B 50%, #B88B35 100%)',
-                            color: '#080E1E',
-                            fontWeight: '800',
-                            borderColor: '#FFE8A3',
-                            boxShadow: '0 2px 10px rgba(223, 177, 91, 0.45)'
-                          } : {
-                            backgroundColor: '#040711',
-                            color: '#ECE6D6',
-                            borderColor: 'rgba(223, 177, 91, 0.3)'
-                          }}
-                          className={"py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer " + (tipoPerfilCadastro === 'cliente' ? 'font-bold shadow-md' : 'hover:border-ouro')}
-                        >
-                          <span>Cliente &amp; Adotante</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTipoPerfilCadastro('doador')}
-                          style={tipoPerfilCadastro === 'doador' ? {
-                            background: 'linear-gradient(135deg, #FFE8A3 0%, #DFB15B 50%, #B88B35 100%)',
-                            color: '#080E1E',
-                            fontWeight: '800',
-                            borderColor: '#FFE8A3',
-                            boxShadow: '0 2px 10px rgba(223, 177, 91, 0.45)'
-                          } : {
-                            backgroundColor: '#040711',
-                            color: '#ECE6D6',
-                            borderColor: 'rgba(223, 177, 91, 0.3)'
-                          }}
-                          className={"py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer " + (tipoPerfilCadastro === 'doador' ? 'font-bold shadow-md' : 'hover:border-ouro')}
-                        >
-                          <span>Doador de Pets</span>
-                        </button>
+                    {/* Perfil Unificado: Cliente & Doador de Pets */}
+                    <div className="sm:col-span-2 p-3.5 rounded-2xl bg-celestial-950/90 border border-ouro/40 flex items-center gap-3.5 shadow-inner">
+                      <div className="w-11 h-11 rounded-xl bg-ouro/20 border border-ouro/40 flex items-center justify-center text-xl shrink-0 shadow-sm">
+                        ✨
                       </div>
-                      <p className="text-[11px] text-[#C2B9A3]">
-                        {tipoPerfilCadastro === 'doador'
-                          ? 'Publicação e gestão exclusiva dos seus animais para adoção responsável.'
-                          : 'Ideal para compras na boutique, reservas no bistrô e pedidos.'}
-                      </p>
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-ouro block tracking-wide">
+                          Conta Exclusiva Completa: Cliente &amp; Doador de Pets
+                        </span>
+                        <p className="text-[11px] text-[#C2B9A3] leading-relaxed">
+                          Com este cadastro único você pode realizar compras na boutique, fazer reservas no bistrô e também cadastrar e doar animais para adoção responsável.
+                        </p>
+                      </div>
                     </div>
                     
                     {/* Nome Completo (Coluna 1) */}
@@ -5324,7 +5313,7 @@ function getFrontendHtml() {
                         }}
                         className="w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer"
                       >
-                        {tipoPerfilCadastro === 'doador' ? 'Cadastrar Doador de Pets' : 'Criar Minha Conta Exclusiva'}
+                        Criar Minha Conta Exclusiva
                       </button>
                     </div>
                   </form>
@@ -5824,7 +5813,7 @@ function getFrontendHtml() {
                 
                 <div className="flex items-center gap-3 border-b border-ouro/25 pb-4">
                   <div className="w-12 h-12 rounded-2xl bg-celestial-950 border border-ouro/50 flex items-center justify-center text-ouro">
-                    {usuario?.role === 'doador' ? (
+                    {usuario?.role !== 'admin' ? (
                       <span className="text-2xl">🐾</span>
                     ) : (
                       <svg className="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -5835,18 +5824,18 @@ function getFrontendHtml() {
                   </div>
                   <div>
                     <h3 className="font-serif text-2xl font-bold gold-gradient-text">
-                      {usuario?.role === 'doador' ? 'Painel do Doador de Pets' : 'Painel de Gestão da Boutique'}
+                      {usuario?.role !== 'admin' ? 'Painel do Doador de Pets' : 'Painel de Gestão da Boutique'}
                     </h3>
                     <span className="text-[11px] text-emerald-400 font-semibold">
-                      {usuario?.role === 'doador' 
-                        ? '✓ Sessão de Protetor / Doador Verificada • Gestão exclusiva dos seus animais' 
+                      {usuario?.role !== 'admin' 
+                        ? '✓ Sessão de Cliente & Doador Verificada • Gestão exclusiva dos seus animais' 
                         : '✓ Sessão de Administradora Verificada'}
                     </span>
                   </div>
                 </div>
 
                 {/* Abas do Painel de Gestão */}
-                {usuario?.role === 'doador' ? (
+                {usuario?.role !== 'admin' ? (
                   <div className="flex flex-wrap gap-1 bg-celestial-950 p-1.5 rounded-2xl border border-ouro/30">
                     <button
                       type="button"
@@ -8741,14 +8730,14 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     return;
   }
 
-  // POST /api/admin/pets (CADASTRO DE PETS POR ADMINISTRADOR OU DOADOR AUTORIZADO)
+  // POST /api/admin/pets (CADASTRO DE PETS POR ADMINISTRADOR OU CLIENTE/DOADOR)
   if (pathname === '/api/admin/pets' && req.method === 'POST') {
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const payload = token ? verificarJwt(token) : null;
-    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador')) {
+    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador' && payload.role !== 'cliente')) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ erro: 'Apenas administradores ou doadores cadastrados podem publicar novos companheiros.' }));
+      res.end(JSON.stringify({ erro: 'Apenas usuários cadastrados podem publicar novos companheiros.' }));
       return;
     }
 
@@ -8760,7 +8749,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         const criadorUsuario = usuarios.find(u => u.id_usuario === payload.id_usuario);
         const criadorNome = criadorUsuario 
           ? criadorUsuario.nome_completo 
-          : (payload.role === 'admin' ? 'Administradora Vênus e Luar' : 'Doador');
+          : (payload.role === 'admin' ? 'Administradora Vênus e Luar' : 'Doador Responsável');
 
         const novoPet = {
           id_pet: pets.length > 0 ? Math.max(...pets.map(p => p.id_pet)) + 1 : 1,
@@ -8798,7 +8787,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const payload = token ? verificarJwt(token) : null;
-    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador')) {
+    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador' && payload.role !== 'cliente')) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ erro: 'Permissão negada.' }));
       return;
@@ -8851,7 +8840,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const payload = token ? verificarJwt(token) : null;
-    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador')) {
+    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador' && payload.role !== 'cliente')) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ erro: 'Permissão negada.' }));
       return;
@@ -8869,7 +8858,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        // VERIFICAÇÃO DE PROPRIEDADE: Doador só pode alterar status do seu próprio pet
+        // VERIFICAÇÃO DE PROPRIEDADE: Doador/Cliente só pode alterar status do seu próprio pet
         if (payload.role !== 'admin' && pet.criado_por !== payload.id_usuario) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ erro: 'Permissão negada. Você só pode gerenciar o status dos pets cadastrados por você.' }));
@@ -8904,7 +8893,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const payload = token ? verificarJwt(token) : null;
-    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador')) {
+    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador' && payload.role !== 'cliente')) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ erro: 'Permissão negada.' }));
       return;
@@ -8917,7 +8906,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
       return;
     }
 
-    // VERIFICAÇÃO DE PROPRIEDADE: Doador só pode excluir o pet que ele mesmo cadastrou!
+    // VERIFICAÇÃO DE PROPRIEDADE: Doador/Cliente só pode excluir o pet que ele mesmo cadastrou!
     if (payload.role !== 'admin' && pet.criado_por !== payload.id_usuario) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ erro: 'Permissão negada. Você só pode excluir os pets cadastrados por você.' }));
@@ -8932,12 +8921,12 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     return;
   }
 
-  // GET /api/admin/candidaturas (LISTAR CANDIDATURAS COM FILTRAGEM POR DOADOR)
+  // GET /api/admin/candidaturas (LISTAR CANDIDATURAS COM FILTRAGEM POR DOADOR/CLIENTE)
   if (pathname === '/api/admin/candidaturas' && req.method === 'GET') {
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const payload = token ? verificarJwt(token) : null;
-    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador')) {
+    if (!payload || (payload.role !== 'admin' && payload.role !== 'doador' && payload.role !== 'cliente')) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ erro: 'Permissão negada.' }));
       return;
@@ -8949,9 +8938,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
       return;
     }
 
-    // Doador: visualiza estritamente as candidaturas dos pets que ele cadastrou
-    const petsDoDoador = pets.filter(p => p.criado_por === payload.id_usuario).map(p => p.id_pet);
-    const candidaturasFiltradas = candidaturasAdocao.filter(c => petsDoDoador.includes(c.id_pet));
+    // Doador / Cliente: visualiza estritamente as candidaturas dos pets que ele cadastrou
+    const petsDoUsuario = pets.filter(p => p.criado_por === payload.id_usuario).map(p => p.id_pet);
+    const candidaturasFiltradas = candidaturasAdocao.filter(c => petsDoUsuario.includes(c.id_pet));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(candidaturasFiltradas));
     return;

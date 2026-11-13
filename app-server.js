@@ -994,15 +994,25 @@ function getFrontendHtml() {
       const [enviandoCandidatura, setEnviandoCandidatura] = useState(false);
       const [filtroStatusPet, setFiltroStatusPet] = useState('Todos'); // 'Todos' | 'Disponível' | 'Adotado'
 
-      // Estados para Checkout, Pagamento e Faturamento
+      // Estados para Checkout, Confirmação Cadastral, Endereço e Pagamento
       const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+      const [etapaCheckout, setEtapaCheckout] = useState('dados'); // 'dados' | 'pagamento'
       const [formaPagamento, setFormaPagamento] = useState('PIX'); // 'PIX' | 'Cartao'
       const [pixCopiado, setPixCopiado] = useState(false);
       const [dadosCartao, setDadosCartao] = useState({ numero: '', nome: '', validade: '', cvv: '', parcelas: '1' });
       const [carregandoPagamento, setCarregandoPagamento] = useState(false);
       const [faturaModal, setFaturaModal] = useState(null);
       const [nomeCheckout, setNomeCheckout] = useState('');
+      const [nascimentoCheckout, setNascimentoCheckout] = useState('');
       const [cpfCheckout, setCpfCheckout] = useState('');
+      const [cepCheckout, setCepCheckout] = useState('');
+      const [logradouroCheckout, setLogradouroCheckout] = useState('');
+      const [numeroCheckout, setNumeroCheckout] = useState('');
+      const [complementoCheckout, setComplementoCheckout] = useState('');
+      const [bairroCheckout, setBairroCheckout] = useState('');
+      const [cidadeCheckout, setCidadeCheckout] = useState('');
+      const [ufCheckout, setUfCheckout] = useState('ES');
+      const [buscandoCep, setBuscandoCep] = useState(false);
 
       // Estados para Gestão de Pets e Faturamento no Admin
       const [listaCandidaturas, setListaCandidaturas] = useState([]);
@@ -1473,26 +1483,66 @@ function getFrontendHtml() {
         leitor.readAsDataURL(arquivo);
       };
 
-      // Estado do formulário de cadastro, CPF e medidor visual de força de senha
+      // Estado do formulário de cadastro (Nome, E-mail, Senha e Data de Nascimento)
       const [nomeCadastro, setNomeCadastro] = useState('');
-      const [cpfCadastro, setCpfCadastro] = useState('');
+      const [dataNascimentoCadastro, setDataNascimentoCadastro] = useState('');
       const [emailCadastro, setEmailCadastro] = useState('');
       const [senhaCadastro, setSenhaCadastro] = useState('');
-      const [tipoPerfilCadastro, setTipoPerfilCadastro] = useState('cliente'); // 'cliente' | 'doador'
       const [concordaTermosLgpd, setConcordaTermosLgpd] = useState(false);
       const [modalTermosLgpdAberto, setModalTermosLgpdAberto] = useState(false);
       const [secaoTermosAtiva, setSecaoTermosAtiva] = useState('todos'); // 'todos' | 'termos_uso' | 'compras' | 'adocao' | 'lgpd'
 
+      const formatarCep = (v) => {
+        const dig = String(v || '').replace(/[^0-9]/g, '').slice(0, 8);
+        if (dig.length <= 5) return dig;
+        return dig.slice(0, 5) + '-' + dig.slice(5);
+      };
+
+      const buscarCep = async (cepValor) => {
+        const limpo = String(cepValor || '').replace(/[^0-9]/g, '');
+        if (limpo.length === 8) {
+          try {
+            setBuscandoCep(true);
+            const res = await fetch('https://viacep.com.br/ws/' + limpo + '/json/');
+            const data = await res.json();
+            if (!data.erro) {
+              setLogradouroCheckout(data.logradouro || '');
+              setBairroCheckout(data.bairro || '');
+              setCidadeCheckout(data.localidade || '');
+              setUfCheckout(data.uf || 'ES');
+              mostrarNotificacao('Endereço preenchido automaticamente via CEP!');
+            } else {
+              mostrarNotificacao('CEP não localizado. Preencha o endereço manualmente.', 'aviso');
+            }
+          } catch (e) {
+            // fallback
+          } finally {
+            setBuscandoCep(false);
+          }
+        }
+      };
 
       const validarCpf = (cpf) => {
         if (!cpf) return false;
         const limpo = String(cpf).replace(/[^0-9]/g, '');
         if (limpo.length !== 11) return false;
+        if (limpo.split('').every(c => c === limpo[0])) return false;
+        let soma = 0;
+        let resto;
+        for (let i = 1; i <= 9; i++) soma += parseInt(limpo.substring(i - 1, i)) * (11 - i);
+        resto = (soma * 10) % 11;
+        if (resto === 10 || resto === 11) resto = 0;
+        if (resto !== parseInt(limpo.substring(9, 10))) return false;
+        soma = 0;
+        for (let i = 1; i <= 10; i++) soma += parseInt(limpo.substring(i - 1, i)) * (12 - i);
+        resto = (soma * 10) % 11;
+        if (resto === 10 || resto === 11) resto = 0;
+        if (resto !== parseInt(limpo.substring(10, 11))) return false;
         return true;
       };
 
-      const cpfLimpo = cpfCadastro.replace(/[^0-9]/g, '');
-      const statusCpf = cpfLimpo.length === 11 ? (validarCpf(cpfCadastro) ? 'valido' : 'invalido') : null;
+      const cpfCheckoutLimpo = (cpfCheckout || '').replace(/[^0-9]/g, '');
+      const statusCpfCheckout = cpfCheckoutLimpo.length === 11 ? (validarCpf(cpfCheckout) ? 'valido' : 'invalido') : null;
 
       const calcularForcaSenha = (senha, nome, email) => {
         if (!senha) return { score: 0, nivel: '', cor: '', bg: '', texto: '' };
@@ -2067,6 +2117,7 @@ function getFrontendHtml() {
                   )}
 
                   <button
+                    id="btn-sacola-header"
                     onClick={() => setIsCarrinhoOpen(true)}
                     className="relative p-1.5 sm:p-2 rounded-full bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-ouro/20 cursor-pointer flex items-center justify-center group flex-shrink-0"
                     aria-label="Ver sacola de compras"
@@ -2773,6 +2824,7 @@ function getFrontendHtml() {
                         <span className="text-ouro">{formatBRL(carrinho.total)}</span>
                       </div>
                       <button
+                        id="btn-avancar-checkout"
                         onClick={() => {
                           if (!usuario) {
                             mostrarNotificacao('Por favor, identifique-se para avançar ao pagamento.', 'aviso');
@@ -2780,13 +2832,28 @@ function getFrontendHtml() {
                             return;
                           }
                           setNomeCheckout(usuario.nome || usuario.nome_completo || '');
+                          setNascimentoCheckout(usuario.data_nascimento || '');
                           setCpfCheckout(usuario.cpf || '');
+                          if (usuario.endereco) {
+                            if (typeof usuario.endereco === 'object') {
+                              setCepCheckout(usuario.endereco.cep || '');
+                              setLogradouroCheckout(usuario.endereco.logradouro || '');
+                              setNumeroCheckout(usuario.endereco.numero || '');
+                              setComplementoCheckout(usuario.endereco.complemento || '');
+                              setBairroCheckout(usuario.endereco.bairro || '');
+                              setCidadeCheckout(usuario.endereco.cidade || '');
+                              setUfCheckout(usuario.endereco.uf || 'ES');
+                            } else if (typeof usuario.endereco === 'string') {
+                              setLogradouroCheckout(usuario.endereco);
+                            }
+                          }
+                          setEtapaCheckout('dados');
                           setIsCarrinhoOpen(false);
                           setIsCheckoutOpen(true);
                         }}
                         className="w-full py-4 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-lg hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-2"
                       >
-                        <span>Avançar para Pagamento &amp; Faturamento</span>
+                        <span>Finalizar Compra &amp; Confirmar Dados</span>
                         <span>➔</span>
                       </button>
                     </div>
@@ -4471,76 +4538,189 @@ function getFrontendHtml() {
           )}
 
           {/* ==================================================================== */}
-          {/* MODAL DE CHECKOUT, PAGAMENTO & FATURAMENTO */}
+          {/* ==================================================================== */}
+          {/* MODAL DE CHECKOUT: CONFIRMAÇÃO CADASTRAL, CPF, ENDEREÇO & PAGAMENTO */}
           {/* ==================================================================== */}
           {isCheckoutOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-              <div className="relative w-full max-w-xl bg-celestial-900 rounded-3xl p-6 sm:p-8 space-y-5 shadow-2xl border-2 border-ouro/60 gold-glow max-h-[92vh] overflow-y-auto">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-2xl bg-celestial-900 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl border-2 border-ouro/60 gold-glow max-h-[92vh] overflow-y-auto">
                 <button 
                   onClick={() => setIsCheckoutOpen(false)} 
                   className="absolute top-4 right-4 text-ouro hover:text-white text-2xl font-bold cursor-pointer"
+                  aria-label="Fechar"
                 >
                   ×
                 </button>
 
-                <div className="text-center space-y-1 border-b border-ouro/25 pb-4">
-                  <span className="text-[10px] uppercase font-bold text-ouro tracking-[0.25em]">Checkout &amp; Faturamento</span>
+                {/* Topo e Indicador de Etapas */}
+                <div className="text-center space-y-2 border-b border-ouro/25 pb-4">
+                  <span className="text-[10px] uppercase font-bold text-ouro tracking-[0.25em]">Checkout &amp; Faturamento Nobre</span>
                   <h3 className="font-serif text-2xl font-bold gold-gradient-text">
-                    Pagamento Nobre na Boutique
+                    Finalização do Pedido Vênus &amp; Luar
                   </h3>
-                  <p className="text-xs text-luar-300">
-                    Finalize seu pedido com emissão instantânea de fatura digital certificada.
-                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <span className={'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ' + (etapaCheckout === 'dados' ? 'bg-ouro/20 text-ouro border-ouro' : 'bg-celestial-950 text-stone-400 border-ouro/20')}>
+                      1. Confirmação &amp; Endereço
+                    </span>
+                    <span className="text-ouro text-xs">➔</span>
+                    <span className={'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ' + (etapaCheckout === 'pagamento' ? 'bg-ouro/20 text-ouro border-ouro' : 'bg-celestial-950 text-stone-400 border-ouro/20')}>
+                      2. Pagamento &amp; Fatura
+                    </span>
+                  </div>
                 </div>
 
-                {/* Resumo Financeiro */}
-                <div className="p-4 rounded-2xl bg-celestial-950 border border-ouro/30 space-y-2.5">
+                {/* Resumo Financeiro da Sacola */}
+                <div className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/30 space-y-2">
                   <div className="flex items-center justify-between text-xs text-luar-300">
-                    <span>Itens Selecionados ({carrinho.totalContador}):</span>
+                    <span>Peças Selecionadas ({carrinho.totalContador} un.):</span>
                     <span>{formatBRL(carrinho.total)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-luar-300">
-                    <span>Entrega Especial:</span>
-                    <span className="text-emerald-400 font-semibold">Cortesia da Boutique (R$ 0,00)</span>
+                    <span>Entrega Exclusiva:</span>
+                    <span className="text-emerald-400 font-semibold">Cortesia da Boutique (Frete Grátis)</span>
                   </div>
                   <div className="pt-2 border-t border-ouro/20 flex items-center justify-between">
-                    <span className="text-sm font-bold text-ouro-light">Total do Pedido:</span>
+                    <span className="text-sm font-bold text-ouro-light">Total a Faturar:</span>
                     <span className="text-xl font-serif font-bold text-ouro">{formatBRL(carrinho.total)}</span>
                   </div>
                 </div>
 
-                {/* Identificação do Cliente */}
-                <div className="space-y-3">
-                  <span className="text-[11px] font-bold text-ouro uppercase tracking-wider block">
-                    Dados para Fatura &amp; Nota Digital
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] text-stone-400 mb-1">Nome Completo</label>
-                      <input 
-                        type="text" 
-                        required 
-                        value={nomeCheckout} 
-                        onChange={(e) => setNomeCheckout(e.target.value)} 
-                        placeholder="Nome Completo" 
-                        className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
-                      />
+                {/* ETAPA 1: CONFIRMAÇÃO DOS DADOS JÁ CADASTRADOS, CPF E ENDEREÇO */}
+                {etapaCheckout === 'dados' && (
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+
+                    // Validação do CPF
+                    const cpfLimpo = (cpfCheckout || '').replace(/[^0-9]/g, '');
+                    if (cpfLimpo.length !== 11 || !validarCpf(cpfCheckout)) {
+                      alert('Por favor, informe um CPF válido com 11 dígitos numéricos para a emissão da nota fiscal.');
+                      return;
+                    }
+
+                    // Validação do Endereço
+                    if (!logradouroCheckout.trim() || !numeroCheckout.trim() || !bairroCheckout.trim() || !cidadeCheckout.trim() || !ufCheckout.trim() || !cepCheckout.trim()) {
+                      alert('Por favor, preencha todos os campos obrigatórios do endereço de entrega (CEP, Logradouro, Número, Bairro, Cidade e Estado).');
+                      return;
+                    }
+
+                    // Salva / Atualiza dados confirmados no perfil do usuário
+                    if (usuario && token) {
+                      try {
+                        const enderecoObj = {
+                          cep: cepCheckout.trim(),
+                          logradouro: logradouroCheckout.trim(),
+                          numero: numeroCheckout.trim(),
+                          complemento: complementoCheckout.trim(),
+                          bairro: bairroCheckout.trim(),
+                          cidade: cidadeCheckout.trim(),
+                          uf: ufCheckout.trim()
+                        };
+                        const res = await fetch('/api/usuario/perfil', {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                          },
+                          body: JSON.stringify({
+                            nome_completo: nomeCheckout.trim(),
+                            data_nascimento: nascimentoCheckout.trim(),
+                            cpf: cpfCheckout.trim(),
+                            endereco: enderecoObj
+                          })
+                        });
+                        const json = await res.json();
+                        if (res.ok && json.usuario) {
+                          setUsuario(json.usuario);
+                          localStorage.setItem('venus_usuario', JSON.stringify(json.usuario));
+                        }
+                      } catch (err) {
+                        // Não interrompe o avanço
+                      }
+                    }
+
+                    setEtapaCheckout('pagamento');
+                    mostrarNotificacao('Dados e endereço confirmados! Escolha a forma de pagamento.');
+                  }} className="space-y-4 animate-fadeIn">
+
+                    {/* BLOCO A: CONFIRMAÇÃO DOS DADOS JÁ CADASTRADOS */}
+                    <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/40 space-y-3">
+                      <div className="flex items-center justify-between border-b border-ouro/20 pb-2">
+                        <span className="text-[11px] font-bold text-ouro uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>1. Confirmação dos Dados Cadastrados</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          ✓ Cadastro Verificado
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-stone-400 mb-1">Nome Completo</label>
+                          <input 
+                            type="text" 
+                            required 
+                            id="input-checkout-nome"
+                            value={nomeCheckout} 
+                            onChange={(e) => setNomeCheckout(e.target.value)} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-stone-400 mb-1">E-mail Cadastrado</label>
+                          <input 
+                            type="text" 
+                            disabled
+                            value={usuario?.email || ''} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/20 text-xs text-stone-400 cursor-not-allowed" 
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-stone-400 mb-1">Data de Nascimento</label>
+                          <input 
+                            type="date" 
+                            required 
+                            id="input-checkout-nascimento"
+                            value={nascimentoCheckout} 
+                            onChange={(e) => setNascimentoCheckout(e.target.value)} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro cursor-pointer font-sans" 
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
+
+                    {/* BLOCO B: SOLICITAÇÃO DO CPF */}
+                    <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/40 space-y-2">
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-stone-400">CPF para a Fatura</label>
-                        {cpfCheckout && (
-                          <button
-                            type="button"
-                            onClick={() => setCpfCheckout('')}
-                            className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
-                            title="Limpar campo para digitar CPF"
-                          >
-                            ✕ Limpar
-                          </button>
-                        )}
+                        <label className="text-[11px] font-bold text-ouro uppercase tracking-wider flex items-center gap-1.5">
+                          <span>🪪</span>
+                          <span>2. CPF para Emissão da Fatura &amp; Nota Digital</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          {cpfCheckout && (
+                            <button
+                              type="button"
+                              onClick={() => setCpfCheckout('')}
+                              className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
+                              title="Limpar campo para digitar CPF"
+                            >
+                              ✕ Limpar
+                            </button>
+                          )}
+                          {statusCpfCheckout === 'valido' && (
+                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                              ✓ Válido
+                            </span>
+                          )}
+                          {statusCpfCheckout === 'invalido' && (
+                            <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
+                              ✕ Inválido
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <input 
+                        id="input-checkout-cpf"
                         type="text" 
                         required 
                         value={cpfCheckout} 
@@ -4551,110 +4731,322 @@ function getFrontendHtml() {
                         spellCheck={false}
                         placeholder="000.000.000-00" 
                         maxLength="14"
-                        className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                        className={'w-full p-2.5 rounded-xl bg-celestial-900 border text-xs font-mono text-luar-100 outline-none transition-all ' + (
+                          statusCpfCheckout === 'valido'
+                            ? 'border-emerald-500 focus:border-emerald-400'
+                            : statusCpfCheckout === 'invalido'
+                            ? 'border-rose-500 focus:border-rose-400'
+                            : 'border-ouro/30 focus:border-ouro'
+                        )} 
                       />
+                      <p className="text-[10px] text-stone-400 leading-relaxed">
+                        O CPF é exigido pela legislação tributária brasileira para emissão da nota fiscal e faturamento de compras.
+                      </p>
                     </div>
-                  </div>
-                </div>
 
-                {/* Seleção do Meio de Pagamento */}
-                <div className="space-y-3">
-                  <span className="text-[11px] font-bold text-ouro uppercase tracking-wider block">
-                    Escolha a Forma de Pagamento
-                  </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormaPagamento('PIX')}
-                      className={\`p-3 rounded-2xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center gap-1.5 \${formaPagamento === 'PIX' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 border-ouro shadow-md' : 'bg-celestial-950 text-luar-300 border-ouro/30 hover:border-ouro'}\`}
-                    >
-                      <span className="text-base">⚡</span>
-                      <span>PIX Instantâneo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormaPagamento('Cartao')}
-                      className={\`p-3 rounded-2xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center gap-1.5 \${formaPagamento === 'Cartao' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 border-ouro shadow-md' : 'bg-celestial-950 text-luar-300 border-ouro/30 hover:border-ouro'}\`}
-                    >
-                      <span className="text-base">💳</span>
-                      <span>Cartão de Crédito</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* ABA PIX */}
-                {formaPagamento === 'PIX' && (
-                  <div className="p-4 rounded-2xl bg-celestial-950 border border-ouro/40 space-y-4 animate-fadeIn text-center">
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="p-3 bg-white rounded-2xl shadow-lg border border-ouro/50 inline-block">
-                        {/* SVG QR CODE PIX HAUTE-COUTURE */}
-                        <svg viewBox="0 0 100 100" className="w-36 h-36">
-                          <rect width="100" height="100" fill="#ffffff" />
-                          <rect x="10" y="10" width="22" height="22" fill="#080E1E" />
-                          <rect x="14" y="14" width="14" height="14" fill="#ffffff" />
-                          <rect x="18" y="18" width="6" height="6" fill="#DFB15B" />
-                          
-                          <rect x="68" y="10" width="22" height="22" fill="#080E1E" />
-                          <rect x="72" y="14" width="14" height="14" fill="#ffffff" />
-                          <rect x="76" y="18" width="6" height="6" fill="#DFB15B" />
-
-                          <rect x="10" y="68" width="22" height="22" fill="#080E1E" />
-                          <rect x="14" y="72" width="14" height="14" fill="#ffffff" />
-                          <rect x="18" y="76" width="6" height="6" fill="#DFB15B" />
-
-                          <rect x="38" y="12" width="5" height="5" fill="#080E1E" />
-                          <rect x="48" y="12" width="5" height="5" fill="#080E1E" />
-                          <rect x="58" y="12" width="5" height="5" fill="#DFB15B" />
-
-                          <rect x="38" y="22" width="10" height="5" fill="#DFB15B" />
-                          <rect x="52" y="22" width="8" height="5" fill="#080E1E" />
-
-                          <rect x="12" y="38" width="6" height="6" fill="#080E1E" />
-                          <rect x="22" y="38" width="8" height="6" fill="#DFB15B" />
-                          <rect x="34" y="36" width="32" height="28" rx="4" fill="#080E1E" />
-                          <text x="50" y="54" fontFamily="serif" fontSize="10" fill="#DFB15B" fontWeight="bold" textAnchor="middle">✦ PIX ✦</text>
-
-                          <rect x="70" y="38" width="8" height="6" fill="#080E1E" />
-                          <rect x="82" y="38" width="6" height="6" fill="#DFB15B" />
-
-                          <rect x="38" y="72" width="6" height="6" fill="#080E1E" />
-                          <rect x="48" y="72" width="8" height="6" fill="#DFB15B" />
-                          <rect x="60" y="72" width="6" height="6" fill="#080E1E" />
-                          <rect x="70" y="72" width="18" height="6" fill="#DFB15B" />
-                          
-                          <rect x="38" y="82" width="12" height="6" fill="#DFB15B" />
-                          <rect x="54" y="82" width="14" height="6" fill="#080E1E" />
-                          <rect x="72" y="82" width="16" height="6" fill="#080E1E" />
-                        </svg>
+                    {/* BLOCO C: SOLICITAÇÃO DO ENDEREÇO COMPLETO */}
+                    <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/40 space-y-3">
+                      <div className="flex items-center justify-between border-b border-ouro/20 pb-2">
+                        <span className="text-[11px] font-bold text-ouro uppercase tracking-wider flex items-center gap-1.5">
+                          <span>📍</span>
+                          <span>3. Endereço Completo de Entrega da Alta Costura</span>
+                        </span>
+                        {buscandoCep && (
+                          <span className="text-[10px] text-ouro animate-pulse">Buscando CEP...</span>
+                        )}
                       </div>
-                      <span className="text-[11px] text-ouro font-semibold">
-                        Escaneie com o app do seu banco ou use a chave abaixo
-                      </span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                        {/* CEP */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-stone-400 mb-1">CEP</label>
+                          <input 
+                            id="input-checkout-cep"
+                            type="text" 
+                            required 
+                            value={cepCheckout} 
+                            onChange={(e) => {
+                              const f = formatarCep(e.target.value);
+                              setCepCheckout(f);
+                              if (f.replace(/[^0-9]/g, '').length === 8) {
+                                buscarCep(f);
+                              }
+                            }} 
+                            inputMode="numeric"
+                            maxLength="9"
+                            placeholder="00000-000" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* Logradouro / Rua */}
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] text-stone-400 mb-1">Logradouro / Rua / Avenida</label>
+                          <input 
+                            id="input-checkout-logradouro"
+                            type="text" 
+                            required 
+                            value={logradouroCheckout} 
+                            onChange={(e) => setLogradouroCheckout(e.target.value)} 
+                            placeholder="Ex: Av. Dante Michelini" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* Número */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-stone-400 mb-1">Número</label>
+                          <input 
+                            id="input-checkout-numero"
+                            type="text" 
+                            required 
+                            value={numeroCheckout} 
+                            onChange={(e) => setNumeroCheckout(e.target.value)} 
+                            placeholder="Ex: 120" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* Complemento */}
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] text-stone-400 mb-1">Complemento (Opcional)</label>
+                          <input 
+                            id="input-checkout-complemento"
+                            type="text" 
+                            value={complementoCheckout} 
+                            onChange={(e) => setComplementoCheckout(e.target.value)} 
+                            placeholder="Ex: Apto 502, Bloco B" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* Bairro */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-stone-400 mb-1">Bairro</label>
+                          <input 
+                            id="input-checkout-bairro"
+                            type="text" 
+                            required 
+                            value={bairroCheckout} 
+                            onChange={(e) => setBairroCheckout(e.target.value)} 
+                            placeholder="Ex: Jardim da Penha" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* Cidade */}
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] text-stone-400 mb-1">Cidade</label>
+                          <input 
+                            id="input-checkout-cidade"
+                            type="text" 
+                            required 
+                            value={cidadeCheckout} 
+                            onChange={(e) => setCidadeCheckout(e.target.value)} 
+                            placeholder="Ex: Vitória" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
+                          />
+                        </div>
+
+                        {/* UF */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] text-stone-400 mb-1">UF</label>
+                          <input 
+                            id="input-checkout-uf"
+                            type="text" 
+                            required 
+                            maxLength="2"
+                            value={ufCheckout} 
+                            onChange={(e) => setUfCheckout(e.target.value.toUpperCase())} 
+                            placeholder="ES" 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 uppercase text-center font-bold outline-none focus:border-ouro" 
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-celestial-900 p-2.5 rounded-xl border border-ouro/30 text-left">
-                      <div className="flex-1 font-mono text-[10px] text-luar-200 truncate select-all">
-                        00020126580014br.gov.bcb.pix0136venuseluar@butique.com5204000053039865405{carrinho.total.toFixed(2)}5802BR5920VENUS E LUAR BOUTIQUE6008VITORIA62070503***6304
+                    <button
+                      type="submit"
+                      id="btn-confirmar-dados-checkout"
+                      className="w-full py-4 rounded-xl bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>Confirmar Dados e Escolher Pagamento</span>
+                      <span>➔</span>
+                    </button>
+                  </form>
+                )}
+
+                {/* ETAPA 2: ESCOLHA DE PAGAMENTO E FATURAMENTO */}
+                {etapaCheckout === 'pagamento' && (
+                  <div className="space-y-4 animate-fadeIn">
+                    
+                    {/* Barra de Resumo dos Dados Confirmados */}
+                    <div className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/40 flex items-center justify-between gap-3 text-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-ouro uppercase tracking-wider block">
+                          Destinatário &amp; Entrega Confirmados:
+                        </span>
+                        <p className="text-luar-100 font-semibold truncate max-w-sm">
+                          {nomeCheckout} • CPF: {mascararCpf(cpfCheckout)}
+                        </p>
+                        <p className="text-[11px] text-stone-400 truncate max-w-md">
+                          📍 {logradouroCheckout}, nº {numeroCheckout}{complementoCheckout ? ' (' + complementoCheckout + ')' : ''} - {bairroCheckout}, {cidadeCheckout}/{ufCheckout} - CEP: {cepCheckout}
+                        </p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(\`00020126580014br.gov.bcb.pix0136venuseluar@butique.com5204000053039865405\${carrinho.total.toFixed(2)}5802BR5920VENUS E LUAR BOUTIQUE6008VITORIA62070503***6304\`);
-                          setPixCopiado(true);
-                          setTimeout(() => setPixCopiado(false), 3000);
-                        }}
-                        className="py-1.5 px-3 rounded-lg bg-ouro/20 hover:bg-ouro/30 text-ouro border border-ouro/40 text-[10px] font-bold uppercase transition-all whitespace-nowrap cursor-pointer"
+                        id="btn-voltar-dados-checkout"
+                        onClick={() => setEtapaCheckout('dados')}
+                        className="py-1.5 px-3 rounded-xl bg-celestial-900 border border-ouro/40 text-ouro hover:bg-ouro hover:text-celestial-950 text-[10.5px] font-bold uppercase transition-all whitespace-nowrap cursor-pointer"
                       >
-                        {pixCopiado ? '✓ Copiado!' : 'Copiar Chave'}
+                        ✎ Alterar
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={carregandoPagamento}
-                      onClick={async () => {
+                    {/* Seleção do Meio de Pagamento */}
+                    <div className="space-y-3">
+                      <span className="text-[11px] font-bold text-ouro uppercase tracking-wider block">
+                        Escolha a Forma de Pagamento
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          id="btn-escolher-pix"
+                          onClick={() => setFormaPagamento('PIX')}
+                          className={'p-3 rounded-2xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center gap-1.5 ' + (formaPagamento === 'PIX' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 border-ouro shadow-md' : 'bg-celestial-950 text-luar-300 border-ouro/30 hover:border-ouro')}
+                        >
+                          <span className="text-base">⚡</span>
+                          <span>PIX Instantâneo</span>
+                        </button>
+                        <button
+                          type="button"
+                          id="btn-escolher-cartao"
+                          onClick={() => setFormaPagamento('Cartao')}
+                          className={'p-3 rounded-2xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center gap-1.5 ' + (formaPagamento === 'Cartao' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 border-ouro shadow-md' : 'bg-celestial-950 text-luar-300 border-ouro/30 hover:border-ouro')}
+                        >
+                          <span className="text-base">💳</span>
+                          <span>Cartão de Crédito</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ABA PIX */}
+                    {formaPagamento === 'PIX' && (
+                      <div className="p-4 rounded-2xl bg-celestial-950 border border-ouro/40 space-y-4 animate-fadeIn text-center">
+                        <div className="flex flex-col items-center space-y-2">
+                          <div className="p-3 bg-white rounded-2xl shadow-lg border border-ouro/50 inline-block">
+                            {/* SVG QR CODE PIX HAUTE-COUTURE */}
+                            <svg viewBox="0 0 100 100" className="w-36 h-36">
+                              <rect width="100" height="100" fill="#ffffff" />
+                              <rect x="10" y="10" width="22" height="22" fill="#080E1E" />
+                              <rect x="14" y="14" width="14" height="14" fill="#ffffff" />
+                              <rect x="18" y="18" width="6" height="6" fill="#DFB15B" />
+                              
+                              <rect x="68" y="10" width="22" height="22" fill="#080E1E" />
+                              <rect x="72" y="14" width="14" height="14" fill="#ffffff" />
+                              <rect x="76" y="18" width="6" height="6" fill="#DFB15B" />
+
+                              <rect x="10" y="68" width="22" height="22" fill="#080E1E" />
+                              <rect x="14" y="72" width="14" height="14" fill="#ffffff" />
+                              <rect x="18" y="76" width="6" height="6" fill="#DFB15B" />
+
+                              <rect x="38" y="12" width="5" height="5" fill="#080E1E" />
+                              <rect x="48" y="12" width="5" height="5" fill="#080E1E" />
+                              <rect x="58" y="12" width="5" height="5" fill="#DFB15B" />
+
+                              <rect x="38" y="22" width="10" height="5" fill="#DFB15B" />
+                              <rect x="52" y="22" width="8" height="5" fill="#080E1E" />
+
+                              <rect x="12" y="38" width="6" height="6" fill="#080E1E" />
+                              <rect x="22" y="38" width="8" height="6" fill="#DFB15B" />
+                              <rect x="34" y="36" width="32" height="28" rx="4" fill="#080E1E" />
+                              <text x="50" y="54" fontFamily="serif" fontSize="10" fill="#DFB15B" fontWeight="bold" textAnchor="middle">✦ PIX ✦</text>
+
+                              <rect x="70" y="38" width="8" height="6" fill="#080E1E" />
+                              <rect x="82" y="38" width="6" height="6" fill="#DFB15B" />
+
+                              <rect x="38" y="72" width="6" height="6" fill="#080E1E" />
+                              <rect x="48" y="72" width="8" height="6" fill="#DFB15B" />
+                              <rect x="60" y="72" width="6" height="6" fill="#080E1E" />
+                              <rect x="70" y="72" width="18" height="6" fill="#DFB15B" />
+                              
+                              <rect x="38" y="82" width="12" height="6" fill="#DFB15B" />
+                              <rect x="54" y="82" width="14" height="6" fill="#080E1E" />
+                              <rect x="72" y="82" width="16" height="6" fill="#080E1E" />
+                            </svg>
+                          </div>
+                          <span className="text-[11px] text-ouro font-semibold">
+                            Escaneie com o app do seu banco ou use a chave abaixo
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-celestial-900 p-2.5 rounded-xl border border-ouro/30 text-left">
+                          <div className="flex-1 font-mono text-[10px] text-luar-200 truncate select-all">
+                            {'00020126580014br.gov.bcb.pix0136venuseluar@butique.com5204000053039865405' + carrinho.total.toFixed(2) + '5802BR5920VENUS E LUAR BOUTIQUE6008VITORIA62070503***6304'}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText('00020126580014br.gov.bcb.pix0136venuseluar@butique.com5204000053039865405' + carrinho.total.toFixed(2) + '5802BR5920VENUS E LUAR BOUTIQUE6008VITORIA62070503***6304');
+                              setPixCopiado(true);
+                              setTimeout(() => setPixCopiado(false), 3000);
+                            }}
+                            className="py-1.5 px-3 rounded-lg bg-ouro/20 hover:bg-ouro/30 text-ouro border border-ouro/40 text-[10px] font-bold uppercase transition-all whitespace-nowrap cursor-pointer"
+                          >
+                            {pixCopiado ? '✓ Copiado!' : 'Copiar Chave'}
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          id="btn-confirmar-pagamento-pix"
+                          disabled={carregandoPagamento}
+                          onClick={async () => {
+                            setCarregandoPagamento(true);
+                            try {
+                              const enderecoFormatado = logradouroCheckout + ', nº ' + numeroCheckout + (complementoCheckout ? ' (' + complementoCheckout + ')' : '') + ' - ' + bairroCheckout + ', ' + cidadeCheckout + '/' + ufCheckout + ' - CEP: ' + cepCheckout;
+                              const res = await fetch('/api/pedidos/faturar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  id_usuario: usuario?.id_usuario,
+                                  nome_cliente: nomeCheckout || usuario?.nome || 'Cliente Vênus e Luar',
+                                  cpf_cliente: cpfCheckout || usuario?.cpf || '',
+                                  endereco_entrega: enderecoFormatado,
+                                  itens: carrinho.itens,
+                                  forma_pagamento: 'PIX Instantâneo',
+                                  detalhes_pagamento: { status_pix: 'Aprovado via QR Code' }
+                                })
+                              });
+                              const json = await res.json();
+                              if (res.ok && json.sucesso) {
+                                carrinho.limpar();
+                                setIsCheckoutOpen(false);
+                                setFaturaModal(json.fatura);
+                                mostrarNotificacao('Pagamento PIX confirmado e fatura emitida!');
+                              } else {
+                                alert(json.erro || 'Falha no faturamento.');
+                              }
+                            } catch (err) {
+                              alert('Erro de conexão ao processar faturamento.');
+                            } finally {
+                              setCarregandoPagamento(false);
+                            }
+                          }}
+                          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {carregandoPagamento ? 'Confirmando Pagamento...' : 'Confirmar Pagamento PIX e Emitir Fatura'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ABA CARTÃO DE CRÉDITO */}
+                    {formaPagamento === 'Cartao' && (
+                      <form onSubmit={async (e) => {
+                        e.preventDefault();
                         setCarregandoPagamento(true);
                         try {
+                          const enderecoFormatado = logradouroCheckout + ', nº ' + numeroCheckout + (complementoCheckout ? ' (' + complementoCheckout + ')' : '') + ' - ' + bairroCheckout + ', ' + cidadeCheckout + '/' + ufCheckout + ' - CEP: ' + cepCheckout;
                           const res = await fetch('/api/pedidos/faturar', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -4662,9 +5054,14 @@ function getFrontendHtml() {
                               id_usuario: usuario?.id_usuario,
                               nome_cliente: nomeCheckout || usuario?.nome || 'Cliente Vênus e Luar',
                               cpf_cliente: cpfCheckout || usuario?.cpf || '',
+                              endereco_entrega: enderecoFormatado,
                               itens: carrinho.itens,
-                              forma_pagamento: 'PIX Instantâneo',
-                              detalhes_pagamento: { status_pix: 'Aprovado via QR Code' }
+                              forma_pagamento: 'Cartão de Crédito (' + dadosCartao.parcelas + 'x)',
+                              detalhes_pagamento: {
+                                ultimos_digitos: dadosCartao.numero.replace(/[^0-9]/g, '').slice(-4),
+                                parcelas: dadosCartao.parcelas,
+                                bandeira: 'Visa / Mastercard Platinum'
+                              }
                             })
                           });
                           const json = await res.json();
@@ -4672,151 +5069,110 @@ function getFrontendHtml() {
                             carrinho.limpar();
                             setIsCheckoutOpen(false);
                             setFaturaModal(json.fatura);
-                            mostrarNotificacao('Pagamento PIX confirmado e fatura emitida!');
+                            mostrarNotificacao('Pagamento aprovado na operadora e fatura emitida!');
                           } else {
-                            alert(json.erro || 'Falha no faturamento.');
+                            alert(json.erro || 'Falha no processamento.');
                           }
                         } catch (err) {
-                          alert('Erro de conexão ao processar faturamento.');
+                          alert('Erro ao faturar com cartão.');
                         } finally {
                           setCarregandoPagamento(false);
                         }
-                      }}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {carregandoPagamento ? 'Confirmando Pagamento...' : 'Confirmar Pagamento PIX e Emitir Fatura'}
-                    </button>
-                  </div>
-                )}
-
-                {/* ABA CARTÃO DE CRÉDITO */}
-                {formaPagamento === 'Cartao' && (
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    setCarregandoPagamento(true);
-                    try {
-                      const res = await fetch('/api/pedidos/faturar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          id_usuario: usuario?.id_usuario,
-                          nome_cliente: nomeCheckout || usuario?.nome || 'Cliente Vênus e Luar',
-                          cpf_cliente: cpfCheckout || usuario?.cpf || '',
-                          itens: carrinho.itens,
-                          forma_pagamento: \`Cartão de Crédito (\${dadosCartao.parcelas}x)\`,
-                          detalhes_pagamento: {
-                            ultimos_digitos: dadosCartao.numero.replace(/[^0-9]/g, '').slice(-4),
-                            parcelas: dadosCartao.parcelas,
-                            bandeira: 'Visa / Mastercard Platinum'
-                          }
-                        })
-                      });
-                      const json = await res.json();
-                      if (res.ok && json.sucesso) {
-                        carrinho.limpar();
-                        setIsCheckoutOpen(false);
-                        setFaturaModal(json.fatura);
-                        mostrarNotificacao('Pagamento aprovado na operadora e fatura emitida!');
-                      } else {
-                        alert(json.erro || 'Falha no processamento.');
-                      }
-                    } catch (err) {
-                      alert('Erro ao faturar com cartão.');
-                    } finally {
-                      setCarregandoPagamento(false);
-                    }
-                  }} className="p-4 rounded-2xl bg-celestial-950 border border-ouro/40 space-y-3 animate-fadeIn">
-                    <div>
-                      <label className="block text-[10px] text-stone-400 mb-1">Número do Cartão</label>
-                      <input 
-                        type="text" 
-                        required 
-                        maxLength={19} 
-                        placeholder="0000 0000 0000 0000" 
-                        value={dadosCartao.numero} 
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 16);
-                          const formatted = v.replace(/([0-9]{4})(?=[0-9])/g, '$1 ');
-                          setDadosCartao({ ...dadosCartao, numero: formatted });
-                        }} 
-                        className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-stone-400 mb-1">Nome no Cartão</label>
-                      <input 
-                        type="text" 
-                        required 
-                        placeholder="NOME COMO NO CARTÃO" 
-                        value={dadosCartao.nome} 
-                        onChange={(e) => setDadosCartao({ ...dadosCartao, nome: e.target.value.toUpperCase() })} 
-                        className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 uppercase outline-none focus:border-ouro" 
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] text-stone-400 mb-1">Validade</label>
-                        <input 
-                          type="text" 
-                          required 
-                          maxLength={5} 
-                          placeholder="MM/AA" 
-                          value={dadosCartao.validade} 
-                          onChange={(e) => {
-                            const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
-                            const formatted = v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v;
-                            setDadosCartao({ ...dadosCartao, validade: formatted });
-                          }} 
-                          className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-stone-400 mb-1">CVV</label>
-                        <div className="relative">
+                      }} className="p-4 rounded-2xl bg-celestial-950 border border-ouro/40 space-y-3 animate-fadeIn">
+                        <div>
+                          <label className="block text-[10px] text-stone-400 mb-1">Número do Cartão</label>
                           <input 
-                            type={verCvvCartao ? "text" : "password"} 
+                            type="text" 
                             required 
-                            maxLength={4} 
-                            placeholder="•••" 
-                            value={dadosCartao.cvv} 
-                            onChange={(e) => setDadosCartao({ ...dadosCartao, cvv: e.target.value.replace(/[^0-9]/g, '') })} 
-                            className="w-full p-2.5 pr-8 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
+                            maxLength={19} 
+                            placeholder="0000 0000 0000 0000" 
+                            value={dadosCartao.numero} 
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 16);
+                              const formatted = v.replace(/([0-9]{4})(?=[0-9])/g, '$1 ');
+                              setDadosCartao({ ...dadosCartao, numero: formatted });
+                            }} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
                           />
-                          {renderBotaoOlhoSenha(verCvvCartao, () => setVerCvvCartao(!verCvvCartao), "btn-ver-cvv-cartao")}
                         </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-stone-400 mb-1">Parcelamento Exclusivo</label>
-                      <select 
-                        value={dadosCartao.parcelas} 
-                        onChange={(e) => setDadosCartao({ ...dadosCartao, parcelas: e.target.value })} 
-                        className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro"
-                      >
-                        <option value="1">1x de {formatBRL(carrinho.total)} (sem juros)</option>
-                        <option value="2">2x de {formatBRL(carrinho.total / 2)} (sem juros)</option>
-                        <option value="3">3x de {formatBRL(carrinho.total / 3)} (sem juros)</option>
-                        <option value="4">4x de {formatBRL(carrinho.total / 4)} (sem juros)</option>
-                        <option value="5">5x de {formatBRL(carrinho.total / 5)} (sem juros)</option>
-                        <option value="6">6x de {formatBRL(carrinho.total / 6)} (sem juros)</option>
-                      </select>
-                    </div>
+                        <div>
+                          <label className="block text-[10px] text-stone-400 mb-1">Nome no Cartão</label>
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="NOME COMO NO CARTÃO" 
+                            value={dadosCartao.nome} 
+                            onChange={(e) => setDadosCartao({ ...dadosCartao, nome: e.target.value.toUpperCase() })} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 uppercase outline-none focus:border-ouro" 
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] text-stone-400 mb-1">Validade</label>
+                            <input 
+                              type="text" 
+                              required 
+                              maxLength={5} 
+                              placeholder="MM/AA" 
+                              value={dadosCartao.validade} 
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                                const formatted = v.length > 2 ? v.slice(0, 2) + '/' + v.slice(2) : v;
+                                setDadosCartao({ ...dadosCartao, validade: formatted });
+                              }} 
+                              className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-stone-400 mb-1">CVV</label>
+                            <div className="relative">
+                              <input 
+                                type={verCvvCartao ? "text" : "password"} 
+                                required 
+                                maxLength={4} 
+                                placeholder="•••" 
+                                value={dadosCartao.cvv} 
+                                onChange={(e) => setDadosCartao({ ...dadosCartao, cvv: e.target.value.replace(/[^0-9]/g, '') })} 
+                                className="w-full p-2.5 pr-8 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 font-mono outline-none focus:border-ouro" 
+                              />
+                              {renderBotaoOlhoSenha(verCvvCartao, () => setVerCvvCartao(!verCvvCartao), "btn-ver-cvv-cartao")}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-stone-400 mb-1">Parcelamento Exclusivo</label>
+                          <select 
+                            value={dadosCartao.parcelas} 
+                            onChange={(e) => setDadosCartao({ ...dadosCartao, parcelas: e.target.value })} 
+                            className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro"
+                          >
+                            <option value="1">1x de {formatBRL(carrinho.total)} (sem juros)</option>
+                            <option value="2">2x de {formatBRL(carrinho.total / 2)} (sem juros)</option>
+                            <option value="3">3x de {formatBRL(carrinho.total / 3)} (sem juros)</option>
+                            <option value="4">4x de {formatBRL(carrinho.total / 4)} (sem juros)</option>
+                            <option value="5">5x de {formatBRL(carrinho.total / 5)} (sem juros)</option>
+                            <option value="6">6x de {formatBRL(carrinho.total / 6)} (sem juros)</option>
+                          </select>
+                        </div>
 
-                    <button
-                      type="submit"
-                      disabled={carregandoPagamento}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {carregandoPagamento ? 'Processando Cartão...' : \`Pagar \${formatBRL(carrinho.total)} com Cartão\`}
-                    </button>
-                  </form>
+                        <button
+                          type="submit"
+                          id="btn-confirmar-pagamento-cartao"
+                          disabled={carregandoPagamento}
+                          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-ouro-dark via-ouro to-ouro text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {carregandoPagamento ? 'Processando Cartão...' : ('Pagar ' + formatBRL(carrinho.total) + ' com Cartão')}
+                        </button>
+                      </form>
+                    )}
+
+                  </div>
                 )}
 
               </div>
             </div>
           )}
 
-          {/* ==================================================================== */}
           {/* MODAL DE FATURA OFICIAL DIGITAL */}
           {/* ==================================================================== */}
           {faturaModal && (
@@ -4862,6 +5218,14 @@ function getFrontendHtml() {
                     <div className="text-luar-200">Forma: <strong className="text-ouro">{faturaModal.forma_pagamento}</strong></div>
                     <div className="text-stone-300 text-[11px]">Data: {new Date(faturaModal.data_emissao || Date.now()).toLocaleString('pt-BR')}</div>
                   </div>
+                  {faturaModal.endereco_entrega && (
+                    <div className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1 sm:col-span-2">
+                      <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Endereço Completo de Entrega</span>
+                      <p className="text-xs text-luar-100 font-semibold">
+                        📍 {faturaModal.endereco_entrega}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Itens Faturados */}
@@ -5084,17 +5448,12 @@ function getFrontendHtml() {
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     const nome = nomeCadastro;
-                    const cpf = cpfCadastro;
+                    const data_nascimento = dataNascimentoCadastro;
                     const email = emailCadastro;
                     const senha = senhaCadastro;
 
-                    if (!cpf || cpf.trim().length === 0) {
-                      alert('O CPF é obrigatório para cadastrar sua conta exclusiva na boutique.');
-                      return;
-                    }
-
-                    if (!validarCpf(cpf)) {
-                      alert('CPF inválido ou incompleto. O CPF é obrigatório e deve conter os 11 dígitos numéricos válidos.');
+                    if (!data_nascimento || data_nascimento.trim().length === 0) {
+                      alert('A data de nascimento é obrigatória para cadastrar sua conta exclusiva na boutique.');
                       return;
                     }
 
@@ -5106,7 +5465,7 @@ function getFrontendHtml() {
                     const res = await fetch('/api/auth/registrar', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ nome, cpf, email, senha, role: 'cliente', concorda_termos: concordaTermosLgpd })
+                      body: JSON.stringify({ nome, data_nascimento, email, senha, role: 'cliente', concorda_termos: concordaTermosLgpd })
                     });
                     const json = await res.json();
                     if (res.ok) {
@@ -5116,7 +5475,7 @@ function getFrontendHtml() {
                       localStorage.setItem('venus_token', json.token);
                       setIsAuthOpen(false);
                       setNomeCadastro('');
-                      setCpfCadastro('');
+                      setDataNascimentoCadastro('');
                       setEmailCadastro('');
                       setSenhaCadastro('');
                       setConcordaTermosLgpd(false);
@@ -5168,57 +5527,29 @@ function getFrontendHtml() {
                       />
                     </div>
 
-                    {/* CPF (Coluna 1) - Obrigatório */}
+                    {/* Data de Nascimento (Coluna 1) - Obrigatório */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-bold text-ouro uppercase tracking-wider">
-                          CPF <span className="text-ouro-light font-normal">(Obrigatório)</span>
+                          Data de Nascimento <span className="text-ouro-light font-normal">(+18 anos)</span>
                         </label>
-                        <div className="flex items-center gap-2">
-                          {cpfCadastro && (
-                            <button
-                              type="button"
-                              onClick={() => setCpfCadastro('')}
-                              className="text-[10px] text-ouro/80 hover:text-ouro bg-celestial-900 px-2 py-0.5 rounded border border-ouro/30 hover:border-ouro transition-colors cursor-pointer"
-                              title="Limpar campo para digitar CPF"
-                            >
-                              ✕ Limpar
-                            </button>
-                          )}
-                          {statusCpf === 'valido' && (
-                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                              ✓ Válido
-                            </span>
-                          )}
-                          {statusCpf === 'invalido' && (
-                            <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
-                              ✕ Inválido
-                            </span>
-                          )}
-                        </div>
+                        {dataNascimentoCadastro && (
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                            ✓ Informada
+                          </span>
+                        )}
                       </div>
                       <input 
-                        id="input-cpf-cadastro"
-                        name="cpf" 
+                        id="input-nascimento-cadastro"
+                        name="data_nascimento" 
+                        type="date"
                         required
-                        value={cpfCadastro}
-                        onChange={(e) => setCpfCadastro(tratarDigitacaoCpf(e.target.value))}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        maxLength="14"
-                        placeholder="000.000.000-00" 
-                        className={"w-full px-3 py-2.5 rounded-xl bg-[#040711] border text-sm font-mono text-[#F8F5EB] placeholder-stone-500 outline-none transition-all " + (
-                          statusCpf === 'valido' 
-                            ? 'border-emerald-500 focus:border-emerald-400' 
-                            : statusCpf === 'invalido'
-                            ? 'border-rose-500 focus:border-rose-400'
-                            : 'border-ouro/40 focus:border-ouro focus:ring-1 focus:ring-ouro'
-                        )} 
+                        value={dataNascimentoCadastro}
+                        onChange={(e) => setDataNascimentoCadastro(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#040711] border border-ouro/40 text-sm text-[#F8F5EB] outline-none focus:border-ouro focus:ring-1 focus:ring-ouro transition-all cursor-pointer font-sans" 
                       />
                       <p className="text-[11px] text-[#C2B9A3] mt-1">
-                        Obrigatório. Protegido por criptografia e privacidade LGPD para faturamento e segurança.
+                        Obrigatório para confirmação de maioridade legal (+18) conforme os Termos de Uso.
                       </p>
                     </div>
 
@@ -5297,13 +5628,7 @@ function getFrontendHtml() {
                     <div className="sm:col-span-2 pt-1">
                       <button 
                         type="submit" 
-                        disabled={statusCpf === 'invalido'}
-                        style={statusCpf === 'invalido' ? {
-                          backgroundColor: '#151D2F',
-                          color: '#64748B',
-                          border: '1px solid #23314F',
-                          cursor: 'not-allowed'
-                        } : {
+                        style={{
                           background: 'linear-gradient(135deg, #FFE8A3 0%, #DFB15B 50%, #B88B35 100%)',
                           color: '#080E1E',
                           fontWeight: '800',
@@ -8212,7 +8537,9 @@ const server = http.createServer((req, res) => {
       id_usuario: u.id_usuario,
       nome_completo: u.nome_completo,
       email: u.email,
+      data_nascimento: u.data_nascimento || null,
       cpf: u.cpf || null,
+      endereco: u.endereco || null,
       role: u.role,
       foto_perfil: u.foto_perfil || null,
       cpf_alterado: !!u.cpf_alterado,
@@ -8241,7 +8568,7 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { nome_completo, email, cpf, senha, foto_perfil } = JSON.parse(body);
+        const { nome_completo, email, cpf, senha, foto_perfil, data_nascimento, endereco } = JSON.parse(body);
         const user = usuarios.find(u => u.id_usuario === payload.id_usuario);
         if (!user) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -8277,7 +8604,17 @@ const server = http.createServer((req, res) => {
           user.foto_perfil = foto_perfil || null;
         }
 
-        // 4. CPF (Livre para qualquer usuário cadastrar ou alterar seu próprio CPF)
+        // 4. Data de Nascimento
+        if (data_nascimento && typeof data_nascimento === 'string' && data_nascimento.trim()) {
+          user.data_nascimento = data_nascimento.trim();
+        }
+
+        // 5. Endereço Completo
+        if (endereco !== undefined) {
+          user.endereco = endereco;
+        }
+
+        // 6. CPF (Livre para qualquer usuário cadastrar ou alterar seu próprio CPF)
         if (cpf !== undefined && cpf !== null && typeof cpf === 'string') {
           const cpfLimpo = cpf.replace(/\D/g, '');
           const cpfAtualLimpo = (user.cpf || '').replace(/\D/g, '');
@@ -8304,7 +8641,7 @@ const server = http.createServer((req, res) => {
           }
         }
 
-        // 5. Senha (Opcional)
+        // 7. Senha (Opcional)
         if (senha && typeof senha === 'string' && senha.trim().length > 0) {
           const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email);
           if (!checagemSenha.valida) {
@@ -8323,7 +8660,9 @@ const server = http.createServer((req, res) => {
           id_usuario: user.id_usuario,
           nome: user.nome_completo,
           email: user.email,
+          data_nascimento: user.data_nascimento || null,
           cpf: user.cpf || null,
+          endereco: user.endereco || null,
           role: user.role,
           foto_perfil: user.foto_perfil || null,
           cpf_alterado: !!user.cpf_alterado
@@ -8959,24 +9298,60 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
+        // Validação obrigatória do CPF para emissão da fatura oficial
+        const cpfLimpo = (cpf_cliente || '').replace(/[^0-9]/g, '');
+        if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O CPF é obrigatório e deve conter 11 dígitos válidos para emissão da nota fiscal digital.' }));
+          return;
+        }
+
+        // Validação obrigatória do endereço completo de entrega
+        if (!endereco_entrega || (typeof endereco_entrega === 'string' && endereco_entrega.trim().length < 5)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O endereço completo de entrega é obrigatório para envio do pedido.' }));
+          return;
+        }
+
+        // Se o usuário estiver autenticado, salva/atualiza o CPF e endereço no cadastro
+        let userId = id_usuario;
+        if (!userId && req.headers['authorization']) {
+          const authH = req.headers['authorization'];
+          const t = authH.startsWith('Bearer ') ? authH.slice(7) : null;
+          const pl = t ? verificarJwt(t) : null;
+          if (pl && pl.id_usuario) userId = pl.id_usuario;
+        }
+        if (userId) {
+          const user = usuarios.find(u => u.id_usuario === userId);
+          if (user) {
+            user.cpf = formatarCpf(cpfLimpo);
+            user.endereco = typeof endereco_entrega === 'object'
+              ? `${endereco_entrega.logradouro || ''}, nº ${endereco_entrega.numero || 'S/N'}${endereco_entrega.complemento ? ' (' + endereco_entrega.complemento + ')' : ''} - ${endereco_entrega.bairro || ''}, ${endereco_entrega.cidade || ''}/${endereco_entrega.uf || 'ES'} - CEP: ${endereco_entrega.cep || ''}`
+              : endereco_entrega;
+            salvarUsuariosNoDisco();
+          }
+        }
+
         const total = itens.reduce((acc, item) => acc + (Number(item.preco) * Number(item.quantidade)), 0);
         const numeroFatura = `FAT-2026-${1000 + pedidos.length + 1}`;
         const chaveAutenticacao = crypto.createHash('sha256')
-          .update(`${numeroFatura}:${total}:${Date.now()}:${cpf_cliente || 'VENUS'}`)
+          .update(`${numeroFatura}:${total}:${Date.now()}:${cpfLimpo}`)
           .digest('hex').slice(0, 32).toUpperCase();
 
         const novoPedidoFaturado = {
           id_pedido: pedidos.length + 1001,
           numero_fatura: numeroFatura,
           chave_autenticacao: chaveAutenticacao,
-          id_usuario: id_usuario || null,
-          nome_cliente: (nome_cliente || 'Cliente Vênus e Luar').trim(),
-          cpf_cliente: cpf_cliente ? formatarCpf(cpf_cliente) : 'Consumidor Final',
+          id_usuario: userId || null,
+          nome_cliente: (nome_cliente || (userId && usuarios.find(u => u.id_usuario === userId)?.nome_completo) || 'Cliente Vênus e Luar').trim(),
+          cpf_cliente: formatarCpf(cpfLimpo),
           total: Number(total.toFixed(2)),
           itens,
           forma_pagamento: forma_pagamento || 'PIX',
           detalhes_pagamento: detalhes_pagamento || {},
-          endereco_entrega: endereco_entrega || 'Retirada na Boutique Vênus e Luar',
+          endereco_entrega: typeof endereco_entrega === 'object' 
+            ? `${endereco_entrega.logradouro || ''}, nº ${endereco_entrega.numero || 'S/N'}${endereco_entrega.complemento ? ' (' + endereco_entrega.complemento + ')' : ''} - ${endereco_entrega.bairro || ''}, ${endereco_entrega.cidade || ''}/${endereco_entrega.uf || 'ES'} - CEP: ${endereco_entrega.cep || ''}`
+            : endereco_entrega,
           status: 'Faturado & Pago',
           criado_em: new Date().toISOString()
         };
@@ -8991,14 +9366,19 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           pedido: novoPedidoFaturado,
           fatura: {
             numero_fatura: novoPedidoFaturado.numero_fatura,
+            codigo_fatura: novoPedidoFaturado.numero_fatura,
             chave_autenticacao: novoPedidoFaturado.chave_autenticacao,
             data_emissao: novoPedidoFaturado.criado_em,
             cliente: {
               nome: novoPedidoFaturado.nome_cliente,
               cpf: novoPedidoFaturado.cpf_cliente
             },
+            cliente_nome: novoPedidoFaturado.nome_cliente,
+            cpf_cliente: novoPedidoFaturado.cpf_cliente,
+            endereco_entrega: novoPedidoFaturado.endereco_entrega,
             itens: novoPedidoFaturado.itens,
             total: novoPedidoFaturado.total,
+            valor_total: novoPedidoFaturado.total,
             forma_pagamento: novoPedidoFaturado.forma_pagamento,
             status: 'FATURADO & PAGO COM SUCESSO'
           }
@@ -9041,16 +9421,10 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { nome, email, senha, cpf, role, tipo_perfil, concorda_termos } = JSON.parse(body);
-        if (!nome || !email || !senha) {
+        const { nome, email, senha, data_nascimento, cpf, role, tipo_perfil, concorda_termos } = JSON.parse(body);
+        if (!nome || !email || !senha || !data_nascimento) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, CPF, E-mail e Senha).' }));
-          return;
-        }
-
-        if (!cpf || typeof cpf !== 'string' || cpf.trim().length === 0) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'O CPF é obrigatório para realizar o cadastro na boutique.' }));
+          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail, Data de Nascimento e Senha).' }));
           return;
         }
 
@@ -9060,22 +9434,43 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        // CPF Obrigatório: validação rigorosa dos 11 dígitos numéricos
-        const cpfLimpo = cpf.replace(/[^0-9]/g, '');
-        if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
+        // Validação da Data de Nascimento e Maioridade (+18 anos)
+        const dataNasc = new Date(data_nascimento);
+        if (isNaN(dataNasc.getTime())) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ 
-            erro: 'CPF inválido ou incompleto. O CPF é obrigatório e deve conter 11 dígitos numéricos válidos.' 
-          }));
+          res.end(JSON.stringify({ erro: 'Data de nascimento inválida. Por favor, selecione uma data válida.' }));
           return;
         }
-        // Bloqueio de duplicidade de CPF
-        if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
-          res.writeHead(409, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada usuário deve possuir conta exclusiva.' }));
+        const hoje = new Date();
+        let idadeCalculada = hoje.getFullYear() - dataNasc.getFullYear();
+        const mesDif = hoje.getMonth() - dataNasc.getMonth();
+        if (mesDif < 0 || (mesDif === 0 && hoje.getDate() < dataNasc.getDate())) {
+          idadeCalculada--;
+        }
+        if (idadeCalculada < 18) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O cadastro é restrito a maiores de 18 anos conforme as Políticas e Termos da Boutique.' }));
           return;
         }
-        const cpfFormatado = formatarCpf(cpfLimpo);
+        if (idadeCalculada > 120) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Por favor, informe uma data de nascimento válida.' }));
+          return;
+        }
+
+        // Tratamento do CPF (agora solicitado e confirmado na finalização da compra)
+        let cpfFormatado = null;
+        if (cpf && typeof cpf === 'string' && cpf.trim().length > 0) {
+          const cpfLimpo = cpf.replace(/[^0-9]/g, '');
+          if (cpfLimpo.length === 11 && validarCpf(cpfLimpo)) {
+            if (usuarios.some(u => u.cpf && u.cpf.replace(/[^0-9]/g, '') === cpfLimpo)) {
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ erro: 'Este CPF já possui cadastro na boutique. Cada usuário deve possuir conta exclusiva.' }));
+              return;
+            }
+            cpfFormatado = formatarCpf(cpfLimpo);
+          }
+        }
 
         const emailNormalizado = email.trim().toLowerCase();
         if (usuarios.some(u => u.email.toLowerCase() === emailNormalizado)) {
@@ -9104,7 +9499,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           id_usuario: 'usr_' + Date.now(),
           nome_completo: nome.trim(),
           email: emailNormalizado,
+          data_nascimento: data_nascimento.trim(),
           cpf: cpfFormatado,
+          endereco: null,
           senha_hash: gerarHashScrypt(senha),
           role: papelFinal,
           termos_lgpd_aceito: true,
@@ -9123,7 +9520,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             id_usuario: novoUsuario.id_usuario,
             nome: novoUsuario.nome_completo,
             email: novoUsuario.email,
+            data_nascimento: novoUsuario.data_nascimento,
             cpf: novoUsuario.cpf,
+            endereco: novoUsuario.endereco,
             role: novoUsuario.role,
             termos_lgpd_aceito: true,
             termos_lgpd_aceito_em: agora,
@@ -9210,7 +9609,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             id_usuario: user.id_usuario,
             nome: user.nome_completo,
             email: user.email,
+            data_nascimento: user.data_nascimento || null,
             cpf: user.cpf || null,
+            endereco: user.endereco || null,
             role: user.role,
             foto_perfil: user.foto_perfil || null,
             cpf_alterado: !!user.cpf_alterado

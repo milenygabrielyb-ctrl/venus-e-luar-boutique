@@ -55,16 +55,39 @@ function formatarCpf(cpf) {
   return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
 }
 
-function validarRegrasSenha(senha, nome = '', email = '') {
+function verificarSequenciaPrevisivel(senha, minLen = 5) {
+  if (!senha || typeof senha !== 'string') return null;
+  const s = senha.toLowerCase();
+  const sequenciasConhecidas = [
+    '01234567890123',
+    '09876543210987',
+    'abcdefghijklmnopqrstuvwxyz',
+    'zyxwvutsrqponmlkjihgfedcba',
+    'qwertyuiop',
+    'asdfghjkl',
+    'zxcvbnm'
+  ];
+  for (const seq of sequenciasConhecidas) {
+    for (let i = 0; i <= seq.length - minLen; i++) {
+      const trecho = seq.slice(i, i + minLen);
+      if (s.includes(trecho)) {
+        return trecho;
+      }
+    }
+  }
+  return null;
+}
+
+function validarRegrasSenha(senha, nome = '', email = '', data_nascimento = '', cpf = '') {
   if (typeof senha !== 'string') {
     return { valida: false, motivo: 'Senha em formato inválido.' };
   }
 
-  // Comprimento mínimo de 6 caracteres
+  // 1. Comprimento mínimo de 6 caracteres (Manual de Boas Práticas - Item 2.1.a)
   if (senha.length < 6) {
     return { 
       valida: false, 
-      motivo: 'A senha deve conter no mínimo 6 caracteres (recomendamos de 10 a 16 caracteres para maior segurança).' 
+      motivo: 'A senha deve conter no mínimo 6 caracteres (Manual de Boas Práticas em Segurança - Item 2.1.a).' 
     };
   }
 
@@ -74,45 +97,90 @@ function validarRegrasSenha(senha, nome = '', email = '') {
 
   const senhaMin = senha.toLowerCase();
 
-  // Bloqueio de senhas fracas da lista negra
+  // 2. Bloqueio de senhas fracas da lista negra (Manual de Boas Práticas - Item 2.1.c)
   for (const termo of LISTA_NEGRA_TERMOS) {
     if (senhaMin === termo || (termo.length >= 5 && senhaMin.includes(termo))) {
       return { 
         valida: false, 
-        motivo: `A senha contém o termo comum proibido "${termo}". Escolha uma senha mais resistente a automações.` 
+        motivo: `A senha contém o termo comum proibido "${termo}". Escolha uma senha mais resistente a automações (Manual de Boas Práticas - Item 2.1.c).` 
       };
     }
   }
 
-  // Sequências repetitivas simples (ex: "aaaaaa", "111111")
+  // 3. Sequências repetitivas simples (ex: "aaaaaa", "111111") (Manual de Boas Práticas - Item 2.1.c)
   if (/^(.)\1{5,}$/.test(senha)) {
     return { 
       valida: false, 
-      motivo: 'A senha não pode ser formada apenas por repetições do mesmo caractere.' 
+      motivo: 'A senha não pode ser formada apenas por repetições do mesmo caractere (Manual de Boas Práticas - Item 2.1.c).' 
     };
   }
 
-  // Bloqueio de dados pessoais: partes do nome
+  // 4. Sequências numéricas ou alfabéticas previsíveis (ex: "123456", "abcdef", "654321") (Manual de Boas Práticas - Item 2.1.c)
+  const seqPrevisivel = verificarSequenciaPrevisivel(senha, 5);
+  if (seqPrevisivel) {
+    return { 
+      valida: false, 
+      motivo: `A senha não pode conter sequências de caracteres previsíveis como "${seqPrevisivel}". (Manual de Boas Práticas - Item 2.1.c)` 
+    };
+  }
+
+  // 5. Bloqueio de dados pessoais: partes do nome (Manual de Boas Práticas - Item 2.1.b)
   if (nome && typeof nome === 'string') {
     const partesNome = nome.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
     for (const parte of partesNome) {
       if (senhaMin.includes(parte)) {
         return { 
           valida: false, 
-          motivo: `Por segurança, a senha não pode conter partes do seu nome ("${parte}").` 
+          motivo: `Por segurança, a senha não pode conter partes do seu nome ("${parte}") (Manual de Boas Práticas - Item 2.1.b).` 
         };
       }
     }
   }
 
-  // Bloqueio de dados pessoais: parte local do e-mail
+  // 6. Bloqueio de dados pessoais: parte local do e-mail (Manual de Boas Práticas - Item 2.1.b)
   if (email && typeof email === 'string') {
     const parteLocal = email.toLowerCase().split('@')[0];
     if (parteLocal.length >= 3 && senhaMin.includes(parteLocal)) {
       return { 
         valida: false, 
-        motivo: 'Por segurança, a senha não pode conter seu usuário de e-mail.' 
+        motivo: 'Por segurança, a senha não pode conter seu usuário de e-mail (Manual de Boas Práticas - Item 2.1.b).' 
       };
+    }
+  }
+
+  // 7. Bloqueio de dados pessoais: data de nascimento (Manual de Boas Práticas - Item 2.1.b)
+  if (data_nascimento && typeof data_nascimento === 'string') {
+    const partesData = data_nascimento.split('-');
+    if (partesData.length === 3) {
+      const [ano, mes, dia] = partesData;
+      if (ano && ano.length === 4 && senha.includes(ano)) {
+        return { 
+          valida: false, 
+          motivo: 'Por segurança, a senha não pode conter o ano do seu nascimento (Manual de Boas Práticas - Item 2.1.b).' 
+        };
+      }
+      if (dia && mes && (senha.includes(dia + mes) || senha.includes(mes + dia))) {
+        return { 
+          valida: false, 
+          motivo: 'Por segurança, a senha não pode conter o dia e mês do seu nascimento (Manual de Boas Práticas - Item 2.1.b).' 
+        };
+      }
+    }
+  }
+
+  // 8. Bloqueio de dados pessoais: sequência de CPF (Manual de Boas Práticas - Item 2.1.b)
+  if (cpf && typeof cpf === 'string') {
+    const cpfDigitos = cpf.replace(/[^0-9]/g, '');
+    if (cpfDigitos.length >= 6) {
+      for (let i = 0; i <= cpfDigitos.length - 6; i++) {
+        const pedacoCpf = cpfDigitos.slice(i, i + 6);
+        if (senha.includes(pedacoCpf)) {
+          return { 
+            valida: false, 
+            motivo: 'Por segurança, a senha não pode conter sequências do seu número de CPF (Manual de Boas Práticas - Item 2.1.b).' 
+          };
+        }
+      }
     }
   }
 
@@ -5944,6 +6012,7 @@ function getFrontendHtml() {
                     { id: 'compras', label: '2. Compras & Entregas' },
                     { id: 'adocao', label: '3. Painel de Adoção' },
                     { id: 'lgpd', label: '4. Privacidade (LGPD)' },
+                    { id: 'seguranca', label: '🛡️ 5. Segurança da Informação' },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -6068,6 +6137,140 @@ function getFrontendHtml() {
                         </div>
                         <div>
                           <strong className="text-ouro font-semibold">Direitos do Titular:</strong> Você tem o direito de solicitar a qualquer momento a confirmação da existência de tratamento dos seus dados, o acesso aos dados coletados, a correção de dados incompletos ou inexatos, a anonimização ou eliminação de dados desnecessários, e a revogação do consentimento, pelos nossos canais oficiais de atendimento.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SEÇÃO 5: MANUAL – BOAS PRÁTICAS EM SEGURANÇA DA INFORMAÇÃO */}
+                  {(secaoTermosAtiva === 'todos' || secaoTermosAtiva === 'seguranca') && (
+                    <div id="secao-termos-5" className="space-y-4 pt-4 border-t border-ouro/20">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base text-ouro">🛡️</span>
+                        <h4 className="font-serif font-bold text-sm sm:text-base text-ouro uppercase tracking-wider">
+                          5. Manual – Boas Práticas em Segurança da Informação (Uso dos Sistemas)
+                        </h4>
+                      </div>
+
+                      {/* 1. OBJETIVO */}
+                      <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/30 space-y-1.5 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-ouro uppercase tracking-wider">1. Objetivo</span>
+                          <span className="px-2 py-0.5 rounded-full bg-ouro/15 text-ouro text-[10px] font-semibold border border-ouro/30">Diretriz de Segurança</span>
+                        </div>
+                        <p className="text-xs text-[#E6E1D3] leading-relaxed">
+                          O objetivo deste manual é estabelecer boas práticas que devem ser observadas para utilização segura dos sistemas disponibilizados pela Fundação e pela boutique.
+                        </p>
+                      </div>
+
+                      {/* 2. RECOMENDAÇÕES */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-ouro uppercase tracking-wider block">
+                            2. Recomendações Gerais e Operacionais
+                          </span>
+                        </div>
+
+                        {/* 2.1 CREDENCIAIS DE ACESSO */}
+                        <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/40 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs sm:text-sm text-ouro flex items-center gap-1.5">
+                              🔑 2.1 Credenciais de Acesso – Login e Senha
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-500/40">
+                              ✓ Mínimo 6 Caracteres
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#C2B9A3] leading-relaxed">
+                            A autenticação para acesso aos sistemas ocorre através do usuário (login) e senha (password). Tal processo visa garantir a confidencialidade no acesso à informação, ou seja, permitir acesso apenas por pessoas autorizadas. Cada usuário é responsável pela escolha de suas senhas pessoais. Portanto, seguem algumas recomendações importantes:
+                          </p>
+                          <ul className="space-y-2 text-xs text-[#E6E1D3] pl-1">
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">a)</span>
+                              <span><strong>Comprimento Mínimo:</strong> Utilize senhas com pelo menos <strong>6 caracteres</strong>;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">b)</span>
+                              <span><strong>Proteção de Dados Pessoais:</strong> Não defina senhas baseadas em informações pessoais, como nomes, sobrenomes, número de documentos, placas de carros, telefones e datas;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">c)</span>
+                              <span><strong>Ausência de Padrões Óbvios:</strong> Não defina senhas com caracteres repetidos ou sequenciais. Exemplo: <em>123456</em>;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">d)</span>
+                              <span><strong>Sigilo Absoluto:</strong> Nunca compartilhe, empreste ou divulgue suas credenciais de acesso com outras pessoas;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">e)</span>
+                              <span><strong>Renovação Periódica:</strong> Altere as senhas periodicamente, com o objetivo de assegurar a confidencialidade das mesmas. É recomendável que as senhas sejam alteradas a cada 6 meses;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">f)</span>
+                              <span><strong>Guarda Segura:</strong> Nunca armazene suas credenciais (login e senha) em locais considerados inseguros, como anotações em papel;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">g)</span>
+                              <span><strong>Senhas Temporárias:</strong> Na hipótese do uso de senhas temporárias, sempre altere as senhas no primeiro acesso;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">h)</span>
+                              <span><strong>Discrição em Locais Públicos:</strong> Cuidado ao digitar sua senha em ambientes públicos, além disso não digite senhas quando estiver sendo observado por alguém;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">i)</span>
+                              <span><strong>Procedimento em Incidentes:</strong> Na hipótese de suas credenciais terem sido comprometidas, ou seja, descobertas por outras pessoas, providencie imediatamente a alteração dos dados.</span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        {/* 2.2 CERTIFICADO DIGITAL */}
+                        <div className="p-4 rounded-2xl bg-celestial-950/90 border border-ouro/40 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs sm:text-sm text-ouro flex items-center gap-1.5">
+                              🔏 2.2 Certificado Digital &amp; e-CPF
+                            </span>
+                            <span className="text-[10px] text-ouro font-bold bg-ouro/15 px-2 py-0.5 rounded-lg border border-ouro/30">
+                              Assinatura &amp; Não Repúdio
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#C2B9A3] leading-relaxed">
+                            Certificado digital é um documento eletrônico emitido por uma autoridade certificadora, utilizado para comprovação de identidade, permitindo acessar serviços informatizados com a garantia de autenticidade, integridade e não repúdio, assim como assinar digitalmente documentos. Cada usuário que recebe o certificado é responsável pela sua guarda e utilização. Algumas recomendações importantes:
+                          </p>
+                          <ul className="space-y-2 text-xs text-[#E6E1D3] pl-1">
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">a)</span>
+                              <span><strong>Uso Estritamente Pessoal:</strong> Nunca forneça o certificado digital a terceiros. O certificado digital é um documento pessoal e intransferível;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">b)</span>
+                              <span><strong>PIN &amp; Termo de Responsabilidade:</strong> Ao solicitar o e-CPF o signatário recebe uma senha pessoal, denominada PIN, além de assinar um termo de responsabilidade no qual se compromete a não compartilhar sua senha e não emprestar o smartcard a terceiros, garantindo assim que de fato é o portador que assina os documentos;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">c)</span>
+                              <span><strong>Senha Forte do PIN (Mínimo 8 Caracteres):</strong> É obrigatório o uso de senha (PIN) para proteger a chave privada e garantir sua segurança. O titular do certificado e-CPF deve criar uma senha forte, com no mínimo 8 caracteres, evitando palavras ou caracteres que o associem à senha escolhida;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">d)</span>
+                              <span><strong>Sem Vínculo com Dados Pessoais:</strong> Não defina senhas baseadas em informações pessoais, como nomes, sobrenomes, número de documentos, placas de carros, telefones e datas;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">e)</span>
+                              <span><strong>Sem Sequências ou Repetições:</strong> Não defina senhas com caracteres repetidos ou sequenciais. Exemplo: <em>123456</em>;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">f)</span>
+                              <span><strong>Não Compartilhamento:</strong> Nunca compartilhe, empreste ou divulgue suas credenciais de acesso com outras pessoas;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">g)</span>
+                              <span><strong>Armazenamento Adequado:</strong> Nunca armazene suas credenciais (login e senha) em locais considerados inseguros, como anotações em papel;</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-ouro font-bold shrink-0">h)</span>
+                              <span><strong>Revogação Imediata perante a Receita Federal:</strong> Caso o titular do certificado tome conhecimento de que a segurança do mesmo foi de alguma forma comprometida, é de sua responsabilidade requerer a imediata revogação do e-CPF, visto que perante a Receita Federal do Brasil, todos os atos executados através do uso do certificado são de responsabilidade única e exclusiva do titular.</span>
+                            </li>
+                          </ul>
                         </div>
                       </div>
                     </div>
@@ -8134,6 +8337,15 @@ function getFrontendHtml() {
                 >
                   🐾 Regras do Painel de Adoção
                 </button>
+                <span className="text-stone-600 hidden sm:inline">•</span>
+                <button
+                  id="btn-footer-termos-seguranca"
+                  type="button"
+                  onClick={() => { setSecaoTermosAtiva('seguranca'); setModalTermosLgpdAberto(true); }}
+                  className="inline-flex items-center gap-1.5 text-stone-300 hover:text-ouro transition-colors cursor-pointer"
+                >
+                  🛡️ Manual de Segurança
+                </button>
               </div>
               <div className="text-[11px] text-stone-400 pt-3 border-t border-ouro/10">
                 © 2026 Vênus e Luar Boutique. Todos os direitos reservados.
@@ -8643,7 +8855,7 @@ const server = http.createServer((req, res) => {
 
         // 7. Senha (Opcional)
         if (senha && typeof senha === 'string' && senha.trim().length > 0) {
-          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email);
+          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email, user.data_nascimento, user.cpf);
           if (!checagemSenha.valida) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ erro: checagemSenha.motivo }));
@@ -8768,7 +8980,7 @@ const server = http.createServer((req, res) => {
 
         // Redefinição de Senha pelo Admin (Opcional)
         if (senha && typeof senha === 'string' && senha.trim().length > 0) {
-          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email);
+          const checagemSenha = validarRegrasSenha(senha, user.nome_completo, user.email, user.data_nascimento, user.cpf);
           if (!checagemSenha.valida) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ erro: checagemSenha.motivo }));
@@ -9479,8 +9691,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        // Validação da Política de Senhas NIST SP 800-63B / LGPD
-        const checagemSenha = validarRegrasSenha(senha, nome, emailNormalizado);
+        // Validação da Política de Senhas (Manual de Boas Práticas em Segurança / NIST SP 800-63B / LGPD)
+        const checagemSenha = validarRegrasSenha(senha, nome, emailNormalizado, data_nascimento, cpfFormatado);
         if (!checagemSenha.valida) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ erro: checagemSenha.motivo }));
@@ -9747,8 +9959,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        // Validação estrita das regras NIST SP 800-63B para a nova senha
-        const checagemSenha = validarRegrasSenha(novaSenha, user.nome_completo, user.email);
+        // Validação estrita das regras (Manual de Boas Práticas / NIST SP 800-63B) para a nova senha
+        const checagemSenha = validarRegrasSenha(novaSenha, user.nome_completo, user.email, user.data_nascimento, user.cpf);
         if (!checagemSenha.valida) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ erro: checagemSenha.motivo }));

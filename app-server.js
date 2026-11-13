@@ -60,11 +60,11 @@ function validarRegrasSenha(senha, nome = '', email = '') {
     return { valida: false, motivo: 'Senha em formato inválido.' };
   }
 
-  // Comprimento mínimo de 8 caracteres (NIST recomenda 12-16)
-  if (senha.length < 8) {
+  // Comprimento mínimo de 6 caracteres
+  if (senha.length < 6) {
     return { 
       valida: false, 
-      motivo: 'A senha deve conter no mínimo 8 caracteres (recomendamos de 12 a 16 caracteres para máxima segurança).' 
+      motivo: 'A senha deve conter no mínimo 6 caracteres (recomendamos de 10 a 16 caracteres para maior segurança).' 
     };
   }
 
@@ -1570,15 +1570,15 @@ function getFrontendHtml() {
         }
 
         let score = 0;
-        if (senha.length >= 8) score += 1;
-        if (senha.length >= 12) score += 1;
+        if (senha.length >= 6) score += 1;
+        if (senha.length >= 10) score += 1;
         if (/[a-z]/.test(senha) && /[A-Z]/.test(senha)) score += 1;
         if (/[0-9]/.test(senha) || /[^a-zA-Z0-9]/.test(senha)) score += 1;
 
-        if (senha.length < 8) {
-          return { score: 1, nivel: 'Fraca', cor: 'text-rose-400', bg: 'bg-rose-500', texto: 'Mínimo de 8 caracteres exigido' };
+        if (senha.length < 6) {
+          return { score: 1, nivel: 'Fraca', cor: 'text-rose-400', bg: 'bg-rose-500', texto: 'Mínimo de 6 caracteres exigido' };
         } else if (score === 2) {
-          return { score: 2, nivel: 'Média', cor: 'text-amber-400', bg: 'bg-amber-500', texto: 'Média • Recomendado 12 a 16 carac.' };
+          return { score: 2, nivel: 'Média', cor: 'text-amber-400', bg: 'bg-amber-500', texto: 'Média • Recomendado 10 a 16 carac.' };
         } else if (score === 3) {
           return { score: 3, nivel: 'Forte', cor: 'text-emerald-400', bg: 'bg-emerald-500', texto: 'Forte • Excelente proteção' };
         } else {
@@ -3701,7 +3701,7 @@ function getFrontendHtml() {
                         type={verSenhaPerfil ? "text" : "password"} 
                         value={perfilNovaSenha} 
                         onChange={(e) => setPerfilNovaSenha(e.target.value)} 
-                        placeholder="Nova senha (mínimo 8 caracteres)" 
+                        placeholder="Nova senha (mínimo 6 caracteres)" 
                         className="w-full p-3 pr-10 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro" 
                       />
                       {renderBotaoOlhoSenha(verSenhaPerfil, () => setVerSenhaPerfil(!verSenhaPerfil), "btn-ver-senha-perfil")}
@@ -5570,10 +5570,10 @@ function getFrontendHtml() {
                           value={senhaCadastro}
                           onChange={(e) => setSenhaCadastro(e.target.value)}
                           required 
-                          minLength="8" 
+                          minLength="6" 
                           maxLength="128" 
                           autoComplete="new-password"
-                          placeholder="Mínimo 8 caracteres" 
+                          placeholder="Mínimo 6 caracteres" 
                           className="w-full px-3 py-2.5 pr-10 rounded-xl bg-[#040711] border border-ouro/40 text-sm text-[#F8F5EB] placeholder-stone-400 outline-none focus:border-ouro focus:ring-1 focus:ring-ouro transition-all" 
                         />
                         {renderBotaoOlhoSenha(verSenhaCadastro, () => setVerSenhaCadastro(!verSenhaCadastro), "btn-ver-senha-cadastro")}
@@ -5595,7 +5595,7 @@ function getFrontendHtml() {
                         </div>
                       ) : (
                         <p className="text-[11px] text-[#C2B9A3] mt-1">
-                          Mínimo de 8 caracteres para proteção da conta.
+                          Mínimo de 6 caracteres para proteção da conta.
                         </p>
                       )}
                     </div>
@@ -5730,8 +5730,8 @@ function getFrontendHtml() {
                           alert('Por favor, informe o código de verificação de 6 dígitos enviado por e-mail.');
                           return;
                         }
-                        if (forcaNovaSenha.score < 2) {
-                          alert('A nova senha não atende aos requisitos mínimos de segurança (mínimo 8 caracteres, sem termos comuns).');
+                        if (novaSenhaRecuperacao.length < 6) {
+                          alert('A nova senha não atende aos requisitos mínimos de segurança (mínimo 6 caracteres, sem termos comuns).');
                           return;
                         }
                         setCarregandoRecuperacao(true);
@@ -5821,11 +5821,11 @@ function getFrontendHtml() {
                             <input 
                               type={verSenhaRecuperacao ? "text" : "password"} 
                               required 
-                              minLength="8" 
+                              minLength="6" 
                               maxLength="128" 
                               value={novaSenhaRecuperacao}
                               onChange={(e) => setNovaSenhaRecuperacao(e.target.value)}
-                              placeholder="Mínimo 8 caracteres (recomendado 12+)" 
+                              placeholder="Mínimo 6 caracteres (recomendado 10+)" 
                               className="w-full p-2.5 pr-10 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro focus:ring-1 focus:ring-ouro/40" 
                             />
                             {renderBotaoOlhoSenha(verSenhaRecuperacao, () => setVerSenhaRecuperacao(!verSenhaRecuperacao), "btn-ver-senha-recuperacao")}

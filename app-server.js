@@ -2185,10 +2185,40 @@ function getFrontendHtml() {
                   >
                     Adoção
                   </button>
+
+                  {usuario?.role === 'admin' && (
+                    <button
+                      id="btn-nav-estoque-admin"
+                      onClick={() => {
+                        setIsAdminOpen(true);
+                        setAbaGestao('produtos');
+                      }}
+                      className="px-2.5 xl:px-3.5 py-1 rounded-full text-[10px] xl:text-[11px] font-bold tracking-[0.08em] uppercase transition-all duration-200 whitespace-nowrap cursor-pointer text-emerald-300 bg-emerald-950/80 hover:bg-emerald-500/30 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
+                      title="Abrir Gestão de Estoque (Admin)"
+                    >
+                      <span>📦</span>
+                      <span>Estoque</span>
+                    </button>
+                  )}
                 </nav>
 
                 {/* Ações da Barra: Gestão, Conta e Sacola (Perfeito em Celular, Tablet e Notebook) */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  {usuario?.role === 'admin' && (
+                    <button
+                      id="btn-estoque-header"
+                      onClick={() => {
+                        setIsAdminOpen(true);
+                        setAbaGestao('produtos');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-emerald-500/60 bg-emerald-950/80 text-emerald-300 hover:bg-emerald-500 hover:text-celestial-950 text-[10.5px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-md group whitespace-nowrap"
+                      title="Acessar Controle de Estoque das Peças"
+                    >
+                      <span>📦</span>
+                      <span className="hidden sm:inline">Estoque</span>
+                    </button>
+                  )}
+
                   <button
                     id="btn-gestao-header"
                     onClick={handleAbrirGestao}
@@ -6811,7 +6841,7 @@ function getFrontendHtml() {
                       onClick={() => setAbaGestao('produtos')}
                       className={"flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer " + (abaGestao === 'produtos' ? 'bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 shadow-md font-bold' : 'text-luar-300 hover:text-ouro')}
                     >
-                      Catálogo ({produtos.length})
+                      📦 Estoque &amp; Catálogo ({produtos.length})
                     </button>
                     <button
                       type="button"
@@ -7412,12 +7442,27 @@ function getFrontendHtml() {
                   </form>
                 )}
 
-                {/* ABA 2: GERENCIAR E EXCLUIR PEÇAS DO CATÁLOGO */}
+                {/* ABA 2: GERENCIAR ESTOQUE E PEÇAS DO CATÁLOGO */}
                 {abaGestao === 'produtos' && (
                   <div className="space-y-3">
-                    <p className="text-xs text-luar-300">
-                      Peças ativas no catálogo. A exclusão remove a peça permanentemente do banco de dados e sincroniza com o disco.
-                    </p>
+                    <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-2">
+                          <span>📦</span> Gestão e Controle de Estoque
+                        </h4>
+                        <p className="text-[11px] text-luar-300 mt-0.5">
+                          Clique em <strong>"📦 Estoque"</strong> em qualquer peça para adicionar, remover ou zerar unidades. Peças com 1 unidade exibem o selo <em>"Última peça em estoque"</em>.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-mono shrink-0">
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 font-semibold">
+                          ⚡ {produtos.filter(p => Number(p.estoque ?? 10) === 1).length} Última peça
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 font-semibold">
+                          ✕ {produtos.filter(p => Number(p.estoque ?? 10) === 0).length} Esgotadas
+                        </span>
+                      </div>
+                    </div>
                     <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                       {produtos.map(p => (
                         <div key={p.id_produto} className="p-3 rounded-2xl bg-celestial-950 border border-ouro/25 flex items-center justify-between gap-3">

@@ -965,12 +965,22 @@ function getFrontendHtml() {
       };
 
       const adicionarAoCarrinho = (produto, customAtributos) => {
+        const estoqueDisponivel = produto.estoque !== undefined ? Number(produto.estoque) : 10;
+        if (estoqueDisponivel <= 0) {
+          alert('Esta criação exclusiva está temporariamente esgotada no ateliê.');
+          return false;
+        }
         const itemExistente = itens.find(i => i.id_produto === produto.id_produto);
+        if (itemExistente && itemExistente.quantidade >= estoqueDisponivel) {
+          alert('Limite de estoque atingido! Só há ' + estoqueDisponivel + ' unidade(s) desta peça exclusiva disponível.');
+          return false;
+        }
         if (itemExistente) {
           salvar(itens.map(i => i.id_produto === produto.id_produto ? { ...i, quantidade: i.quantidade + 1, atributosSelecionados: customAtributos || i.atributosSelecionados } : i));
         } else {
           salvar([...itens, { ...produto, quantidade: 1, atributosSelecionados: customAtributos || produto.atributos }]);
         }
+        return true;
       };
 
       const decrementar = (id_produto) => {
@@ -1041,6 +1051,9 @@ function getFrontendHtml() {
       const [isAdminOpen, setIsAdminOpen] = useState(false);
       const [produtoModal, setProdutoModal] = useState(null);
       const [petModal, setPetModal] = useState(null);
+      const [modalEstoqueAdmin, setModalEstoqueAdmin] = useState(null);
+      const [estoqueAjusteInput, setEstoqueAjusteInput] = useState(0);
+      const [salvandoEstoque, setSalvandoEstoque] = useState(false);
 
       // MODAIS DE PERMISSIONAMENTO
       const [isPermissionamentoGestaoOpen, setIsPermissionamentoGestaoOpen] = useState(false);
@@ -1356,6 +1369,54 @@ function getFrontendHtml() {
           alert('Erro na conexão ao salvar edição.');
         } finally {
           setSalvandoEdicao(false);
+        }
+      };
+
+      const abrirModalEstoque = (prod) => {
+        if (!prod) return;
+        if (usuario?.role !== 'admin') {
+          alert('Acesso restrito. Apenas administradores autorizados podem gerenciar o estoque.');
+          return;
+        }
+        setModalEstoqueAdmin(prod);
+        setEstoqueAjusteInput(prod.estoque !== undefined ? Number(prod.estoque) : 10);
+      };
+
+      const salvarAjusteEstoque = async () => {
+        if (!modalEstoqueAdmin) return;
+        if (usuario?.role !== 'admin') {
+          alert('Permissão negada. Apenas administradores podem atualizar o estoque.');
+          return;
+        }
+        const novoEstoque = Math.max(0, parseInt(estoqueAjusteInput, 10) || 0);
+        setSalvandoEstoque(true);
+        try {
+          const res = await fetch('/api/produtos/estoque', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              id_produto: modalEstoqueAdmin.id_produto,
+              estoque: novoEstoque
+            })
+          });
+          const json = await res.json();
+          if (res.ok) {
+            setProdutos(prev => prev.map(p => p.id_produto === modalEstoqueAdmin.id_produto ? { ...p, estoque: json.produto.estoque } : p));
+            if (produtoModal && produtoModal.id_produto === modalEstoqueAdmin.id_produto) {
+              setProdutoModal({ ...produtoModal, estoque: json.produto.estoque });
+            }
+            mostrarNotificacao(json.mensagem || 'Estoque atualizado com sucesso!');
+            setModalEstoqueAdmin(null);
+          } else {
+            alert(json.erro || 'Falha ao atualizar estoque.');
+          }
+        } catch (err) {
+          alert('Erro ao conectar ao servidor para atualizar estoque.');
+        } finally {
+          setSalvandoEstoque(false);
         }
       };
 
@@ -1932,14 +1993,22 @@ function getFrontendHtml() {
       // REGRA 2 DE PERMISSIONAMENTO: BLOQUEIA ADICIONAR À SACOLA SEM LOGIN
       // ================================================================
       const tentarAdicionarAoCarrinho = (produto, customAtributos) => {
+        if (!produto) return false;
+        const estoqueDisponivel = produto.estoque !== undefined ? Number(produto.estoque) : 10;
+        if (estoqueDisponivel <= 0) {
+          alert('Esta peça exclusiva está temporariamente esgotada no ateliê.');
+          return false;
+        }
         if (!usuario) {
           setItemPendenteAuth({ produto, customAtributos });
           setIsPermissionamentoCompraOpen(true);
           return false;
         }
-        carrinho.adicionarAoCarrinho(produto, customAtributos);
-        setIsCarrinhoOpen(true);
-        return true;
+        const adicionou = carrinho.adicionarAoCarrinho(produto, customAtributos);
+        if (adicionou) {
+          setIsCarrinhoOpen(true);
+        }
+        return adicionou;
       };
 
       const handleLoginAdminSucesso = (usr, tok) => {
@@ -2514,6 +2583,20 @@ function getFrontendHtml() {
                         <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-celestial-950/90 border border-ouro/40 text-ouro shadow">
                           {prod.categoria}
                         </span>
+
+                        {/* Alerta de Última Peça ou Esgotado sobre a imagem */}
+                        {prod.estoque === 1 && (
+                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500 text-celestial-950 border border-amber-300 shadow-xl animate-pulse flex items-center gap-1 font-sans">
+                            <span>⚠️</span>
+                            <span>Última peça em estoque</span>
+                          </span>
+                        )}
+                        {prod.estoque === 0 && (
+                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-rose-600 text-white border border-rose-300 shadow-xl flex items-center gap-1 font-sans">
+                            <span>✕</span>
+                            <span>Esgotado</span>
+                          </span>
+                        )}
                       </div>
 
                       <div className="p-5 space-y-2">
@@ -2534,6 +2617,24 @@ function getFrontendHtml() {
                           {prod.atributos?.tipo_leite && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Leite: {prod.atributos.tipo_leite}</span>}
                           {prod.atributos?.tamanho_pet && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Porte: {prod.atributos.tamanho_pet}</span>}
                         </div>
+
+                        {/* Alerta de Estoque Crítico no Corpo do Card */}
+                        {prod.estoque === 1 && (
+                          <div className="pt-2">
+                            <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
+                              <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                              <span>Última peça em estoque</span>
+                            </span>
+                          </div>
+                        )}
+                        {prod.estoque === 0 && (
+                          <div className="pt-2">
+                            <span className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 px-2.5 py-1 rounded-lg">
+                              <span>✕</span>
+                              <span>Peça esgotada no ateliê</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2544,9 +2645,21 @@ function getFrontendHtml() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Botões Exclusivos para Administrador (Editar e Excluir) */}
+                        {/* Botões Exclusivos para Administrador (Estoque, Editar e Excluir) */}
                         {usuario?.role === 'admin' && (
                           <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                abrirModalEstoque(prod);
+                              }}
+                              className="px-2.5 py-2 rounded-xl bg-celestial-900 hover:bg-ouro/25 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
+                              title="Gerenciar estoque desta peça"
+                            >
+                              <span>📦</span>
+                              <span>{prod.estoque !== undefined ? prod.estoque : 10}</span>
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2578,19 +2691,33 @@ function getFrontendHtml() {
                           </div>
                         )}
 
-                        {/* Botão Comprar com Proteção de Permissionamento */}
-                        <button
-                          type="button"
-                          onClick={() => tentarAdicionarAoCarrinho(prod)}
-                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-                        >
-                          {!usuario && (
-  <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-  </svg>
-)}
-                          <span>Comprar</span>
-                        </button>
+                        {/* Botão Comprar com Proteção de Estoque e Permissionamento */}
+                        {prod.estoque === 0 ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="px-4 py-2.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-500 font-bold text-xs cursor-not-allowed opacity-60 flex items-center gap-1.5"
+                          >
+                            <span>Esgotado</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => tentarAdicionarAoCarrinho(prod)}
+                            className={"px-4 py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer " + (
+                              prod.estoque === 1
+                                ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-celestial-950 font-bold shadow-amber-500/25'
+                                : 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950'
+                            )}
+                          >
+                            {!usuario && (
+                              <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                              </svg>
+                            )}
+                            <span>{prod.estoque === 1 ? 'Comprar Última Peça' : 'Comprar'}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2938,13 +3065,51 @@ function getFrontendHtml() {
               <div className="relative w-full max-w-xl bg-celestial-900 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl border border-ouro/40 animate-fadeIn">
                 <button onClick={() => setProdutoModal(null)} className="absolute top-4 right-4 text-ouro hover:text-white text-2xl font-bold cursor-pointer">×</button>
                 <div className="flex gap-4 items-center">
-                  <img src={produtoModal.imagem_url} className="w-24 h-24 rounded-2xl object-cover border border-ouro/30" />
+                  <img src={produtoModal.imagem_url} className="w-24 h-24 rounded-2xl object-cover border border-ouro/30 shadow-md" />
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-ouro bg-celestial-950 border border-ouro/30 px-2.5 py-0.5 rounded">{produtoModal.categoria}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-ouro bg-celestial-950 border border-ouro/30 px-2.5 py-0.5 rounded">{produtoModal.categoria}</span>
+                      {Number(produtoModal.estoque ?? 10) === 1 && (
+                        <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/20 border border-amber-400/60 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
+                          <span>⚡</span> Última peça
+                        </span>
+                      )}
+                      {Number(produtoModal.estoque ?? 10) === 0 && (
+                        <span className="text-[10px] uppercase font-bold text-rose-300 bg-rose-500/20 border border-rose-500/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <span>✕</span> Esgotado
+                        </span>
+                      )}
+                    </div>
                     <h3 className="font-serif text-xl font-bold text-ouro-light mt-1">{produtoModal.nome_item}</h3>
-                    <span className="text-lg font-serif font-bold text-ouro">{formatBRL(produtoModal.preco)}</span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-lg font-serif font-bold text-ouro">{formatBRL(produtoModal.preco)}</span>
+                      <span className="text-[11px] text-luar-400 font-mono">
+                        (Estoque: <strong className={Number(produtoModal.estoque ?? 10) === 0 ? 'text-rose-400' : Number(produtoModal.estoque ?? 10) === 1 ? 'text-amber-400' : 'text-emerald-400'}>{produtoModal.estoque ?? 10} un.</strong>)
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Banner de Urgência / Esgotado */}
+                {Number(produtoModal.estoque ?? 10) === 1 && (
+                  <div className="p-3 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-3 animate-pulse shadow-md">
+                    <span className="text-xl">⚡</span>
+                    <div>
+                      <p className="uppercase tracking-wider font-black text-amber-300 text-xs">Última peça em estoque!</p>
+                      <p className="text-[11px] text-amber-100/90 font-normal mt-0.5">Resta apenas 1 unidade exclusiva disponível em nosso acervo.</p>
+                    </div>
+                  </div>
+                )}
+                {Number(produtoModal.estoque ?? 10) === 0 && (
+                  <div className="p-3 rounded-2xl bg-rose-500/20 border-2 border-rose-500 text-rose-200 text-xs font-bold flex items-center gap-3 shadow-md">
+                    <span className="text-xl">✕</span>
+                    <div>
+                      <p className="uppercase tracking-wider font-black text-rose-300 text-xs">Peça Esgotada</p>
+                      <p className="text-[11px] text-rose-100/90 font-normal mt-0.5">Todas as unidades foram adquiridas. Aguarde reposição de acervo.</p>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-luar-300 leading-relaxed font-light">{produtoModal.descricao}</p>
                 <div className="border-t border-ouro/20 pt-3 space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -2985,34 +3150,266 @@ function getFrontendHtml() {
                 </div>
                 <div className="flex items-center gap-3">
                   {usuario?.role === 'admin' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prod = produtoModal;
+                          setProdutoModal(null);
+                          iniciarEdicaoProduto(prod);
+                        }}
+                        className="px-3.5 py-3.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/15 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Editar informações desta peça"
+                      >
+                        <span>✏️</span>
+                        <span>Editar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prod = produtoModal;
+                          setProdutoModal(null);
+                          abrirModalEstoque(prod);
+                        }}
+                        className="px-3.5 py-3.5 rounded-xl bg-celestial-950 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/20 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Gerenciar estoque desta peça"
+                      >
+                        <span>📦</span>
+                        <span>Estoque ({produtoModal.estoque ?? 10})</span>
+                      </button>
+                    </>
+                  )}
+
+                  {Number(produtoModal.estoque ?? 10) === 0 ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex-1 py-3.5 rounded-xl bg-celestial-950/80 border border-luar-400/20 text-luar-400/50 font-bold text-xs uppercase tracking-wider cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <span>✕ Peça Esgotada</span>
+                    </button>
+                  ) : Number(produtoModal.estoque ?? 10) === 1 ? (
                     <button
                       type="button"
                       onClick={() => {
-                        const prod = produtoModal;
-                        setProdutoModal(null);
-                        iniciarEdicaoProduto(prod);
+                        const ok = tentarAdicionarAoCarrinho(produtoModal);
+                        if (ok) setProdutoModal(null);
                       }}
-                      className="px-4 py-3.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/15 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Editar informações desta peça"
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-celestial-950 font-black text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer animate-pulse"
                     >
-                      <span>✏️</span>
-                      <span>Editar Peça</span>
+                      <span>⚡ Adicionar Última Peça</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ok = tentarAdicionarAoCarrinho(produtoModal);
+                        if (ok) setProdutoModal(null);
+                      }}
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {!usuario && (
+                        <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                      )}
+                      <span>Adicionar à Sacola</span>
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL EXCLUSIVO DE GESTÃO DE ESTOQUE (ADMINISTRADOR) */}
+          {/* ==================================================================== */}
+          {modalEstoqueAdmin && usuario?.role === 'admin' && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="relative w-full max-w-lg bg-celestial-900 rounded-3xl p-6 sm:p-7 space-y-5 shadow-2xl border-2 border-ouro/60 gold-glow">
+                <button
+                  type="button"
+                  onClick={() => setModalEstoqueAdmin(null)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-celestial-950 border border-ouro/40 hover:border-ouro text-ouro hover:text-white flex items-center justify-center text-lg font-bold transition-all cursor-pointer z-10"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                <div className="border-b border-ouro/20 pb-3 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-ouro/20 to-emerald-500/20 border border-ouro/50 flex items-center justify-center text-ouro text-xl shadow-inner">
+                    📦
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-ouro tracking-wider block">
+                        Controle de Estoque
+                      </span>
+                      <span className="text-[9px] bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.2 rounded font-bold uppercase">
+                        Admin Only
+                      </span>
+                    </div>
+                    <h3 className="font-serif text-xl font-bold gold-gradient-text">
+                      {modalEstoqueAdmin.nome_item}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 bg-celestial-950/80 p-3.5 rounded-2xl border border-ouro/25">
+                  <img
+                    src={modalEstoqueAdmin.imagem_url}
+                    alt={modalEstoqueAdmin.nome_item}
+                    className="w-16 h-16 rounded-xl object-cover border border-ouro/30 shadow-md"
+                  />
+                  <div className="flex-1">
+                    <span className="text-[10px] uppercase font-bold text-ouro/70">
+                      {modalEstoqueAdmin.categoria}
+                    </span>
+                    <p className="text-xs text-luar-100 font-semibold truncate">
+                      {modalEstoqueAdmin.nome_item}
+                    </p>
+                    <p className="text-xs text-ouro font-mono font-bold mt-0.5">
+                      {formatBRL(modalEstoqueAdmin.preco)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-luar-300 block">Estoque Atual</span>
+                    <span className={'text-xl font-mono font-black ' + (Number(modalEstoqueAdmin.estoque ?? 10) === 0 ? 'text-rose-400' : Number(modalEstoqueAdmin.estoque ?? 10) === 1 ? 'text-amber-400' : 'text-emerald-400')}>
+                      {modalEstoqueAdmin.estoque ?? 10} un.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-celestial-950 p-4 rounded-2xl border border-ouro/25">
+                  <label className="block text-xs font-bold text-ouro uppercase tracking-wider">
+                    Definir Nova Quantidade em Estoque
+                  </label>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) - 10))}
+                      className="px-2.5 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-xs font-mono font-bold cursor-pointer transition-all"
+                      title="Diminuir 10 unidades"
+                    >
+                      -10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) - 5))}
+                      className="px-2.5 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-xs font-mono font-bold cursor-pointer transition-all"
+                      title="Diminuir 5 unidades"
+                    >
+                      -5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) - 1))}
+                      className="w-9 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-sm font-mono font-bold cursor-pointer transition-all"
+                      title="Diminuir 1 unidade"
+                    >
+                      -1
+                    </button>
+
+                    <input
+                      type="number"
+                      min="0"
+                      value={estoqueAjusteInput}
+                      onChange={(e) => setEstoqueAjusteInput(e.target.value)}
+                      className="flex-1 py-2 px-3 text-center rounded-xl bg-celestial-900 border-2 border-ouro text-base text-luar-100 font-mono font-bold outline-none focus:ring-2 focus:ring-ouro/50"
+                      placeholder="0"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) + 1))}
+                      className="w-9 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-sm font-mono font-bold cursor-pointer transition-all"
+                      title="Aumentar 1 unidade"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) + 5))}
+                      className="px-2.5 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-xs font-mono font-bold cursor-pointer transition-all"
+                      title="Aumentar 5 unidades"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(Math.max(0, Number(estoqueAjusteInput || 0) + 10))}
+                      className="px-2.5 py-2 rounded-xl bg-celestial-900 border border-ouro/30 text-ouro hover:bg-ouro/20 text-xs font-mono font-bold cursor-pointer transition-all"
+                      title="Aumentar 10 unidades"
+                    >
+                      +10
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(0)}
+                      className="text-[11px] font-semibold text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                    >
+                      ✕ Zerar estoque (Esgotar peça)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstoqueAjusteInput(1)}
+                      className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      ⚡ Deixar como Última Peça (1 un.)
+                    </button>
+                  </div>
+
+                  {/* Prévia do status que a peça assumirá */}
+                  <div className="pt-2">
+                    {Number(estoqueAjusteInput) === 1 ? (
+                      <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-2">
+                        <span>⚡</span>
+                        <span>Status: <strong>Última peça em estoque</strong> (exibirá selo dourado/âmbar e aviso de urgência na vitrine)</span>
+                      </div>
+                    ) : Number(estoqueAjusteInput) === 0 ? (
+                      <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500 text-rose-200 text-xs font-bold flex items-center gap-2">
+                        <span>✕</span>
+                        <span>Status: <strong>Peça Esgotada</strong> (botão de compra será desabilitado)</span>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 text-xs font-bold flex items-center gap-2">
+                        <span>✓</span>
+                        <span>Status: <strong>Disponível normal</strong> ({estoqueAjusteInput} unidades em estoque)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      const ok = tentarAdicionarAoCarrinho(produtoModal);
-                      if (ok) setProdutoModal(null);
-                    }}
-                    className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    onClick={() => setModalEstoqueAdmin(null)}
+                    disabled={salvandoEstoque}
+                    className="flex-1 py-3 rounded-xl bg-celestial-950 border border-ouro/40 text-luar-300 hover:text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                   >
-                    {!usuario && (
-                      <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                      </svg>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={salvarAjusteEstoque}
+                    disabled={salvandoEstoque}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {salvandoEstoque ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-celestial-950 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Salvando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>💾</span>
+                        <span>Salvar Estoque</span>
+                      </>
                     )}
-                    <span>Adicionar à Sacola</span>
                   </button>
                 </div>
               </div>
@@ -5091,6 +5488,7 @@ function getFrontendHtml() {
                                 carrinho.limpar();
                                 setIsCheckoutOpen(false);
                                 setFaturaModal(json.fatura);
+                                carregarDados();
                                 mostrarNotificacao('Pagamento PIX confirmado e fatura emitida!');
                               } else {
                                 alert(json.erro || 'Falha no faturamento.');
@@ -5137,6 +5535,7 @@ function getFrontendHtml() {
                             carrinho.limpar();
                             setIsCheckoutOpen(false);
                             setFaturaModal(json.fatura);
+                            carregarDados();
                             mostrarNotificacao('Pagamento aprovado na operadora e fatura emitida!');
                           } else {
                             alert(json.erro || 'Falha no processamento.');
@@ -7027,10 +7426,37 @@ function getFrontendHtml() {
                             <div className="min-w-0">
                               <span className="text-[10px] uppercase font-bold text-ouro/80 block">{p.categoria}</span>
                               <h4 className="text-xs font-bold text-ouro-light truncate">{p.nome_item}</h4>
-                              <span className="text-xs font-serif text-ouro font-semibold">{formatBRL(p.preco)}</span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs font-serif text-ouro font-semibold">{formatBRL(p.preco)}</span>
+                                <span className="text-luar-400 text-[10px]">•</span>
+                                {Number(p.estoque ?? 10) === 1 ? (
+                                  <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-400/50 px-2 py-0.5 rounded-md animate-pulse">
+                                    ⚡ 1 un. (Última peça!)
+                                  </span>
+                                ) : Number(p.estoque ?? 10) === 0 ? (
+                                  <span className="text-[10px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/50 px-2 py-0.5 rounded-md">
+                                    ✕ Esgotado (0 un.)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md font-mono">
+                                    📦 {p.estoque ?? 10} un.
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAdminOpen(false);
+                                abrirModalEstoque(p);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 hover:text-emerald-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                              title="Ajustar estoque desta peça"
+                            >
+                              <span>📦 Estoque</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -8733,6 +9159,50 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // PUT /api/produtos/estoque (GESTÃO EXCLUSIVA DE ESTOQUE - APENAS ADMINISTRADORES)
+  if (pathname === '/api/produtos/estoque' && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const dados = JSON.parse(body);
+        const authHeader = req.headers['authorization'];
+        let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+        if (!token && dados.token) token = dados.token;
+
+        const payload = token ? verificarJwt(token) : null;
+        if (!payload || payload.role !== 'admin') {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Permissão negada. Apenas administradores autorizados podem gerenciar o estoque.' }));
+          return;
+        }
+
+        const idProduto = Number(dados.id_produto);
+        const produto = produtos.find(p => p.id_produto === idProduto);
+        if (!produto) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Peça não encontrada no catálogo da boutique.' }));
+          return;
+        }
+
+        const novoEstoque = Math.max(0, parseInt(dados.estoque, 10) || 0);
+        produto.estoque = novoEstoque;
+        salvarProdutosNoDisco();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          mensagem: `Estoque da peça "${produto.nome_item}" atualizado para ${novoEstoque} unidade(s).`,
+          produto
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao processar atualização de estoque.' }));
+      }
+    });
+    return;
+  }
+
   // GET /api/usuarios (LISTAGEM DE AUDITORIA EXCLUSIVA PARA ADMINISTRADORES)
   if (pathname === '/api/usuarios' && req.method === 'GET') {
     const authHeader = req.headers['authorization'];
@@ -9543,6 +10013,33 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             salvarUsuariosNoDisco();
           }
         }
+
+        // Verificação estrita de estoque antes de emitir a fatura
+        for (const it of itens) {
+          const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
+          if (prodNoBanco) {
+            const estoqueAtual = prodNoBanco.estoque !== undefined ? Number(prodNoBanco.estoque) : 10;
+            if (estoqueAtual < Number(it.quantidade)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ 
+                erro: estoqueAtual === 0
+                  ? `A peça exclusiva "${prodNoBanco.nome_item}" está esgotada no momento (0 unidades em estoque). Por favor, ajuste a quantidade na sacola.`
+                  : `A peça exclusiva "${prodNoBanco.nome_item}" possui apenas ${estoqueAtual} unidade(s) em estoque. Por favor, ajuste a quantidade na sacola.` 
+              }));
+              return;
+            }
+          }
+        }
+
+        // Baixa automática de estoque após validação
+        for (const it of itens) {
+          const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
+          if (prodNoBanco) {
+            const estoqueAtual = prodNoBanco.estoque !== undefined ? Number(prodNoBanco.estoque) : 10;
+            prodNoBanco.estoque = Math.max(0, estoqueAtual - Number(it.quantidade));
+          }
+        }
+        salvarProdutosNoDisco();
 
         const total = itens.reduce((acc, item) => acc + (Number(item.preco) * Number(item.quantidade)), 0);
         const numeroFatura = `FAT-2026-${1000 + pedidos.length + 1}`;

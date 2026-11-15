@@ -117,6 +117,87 @@ function getPdvHtml() {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+    /* Layout Responsivo Profissional do PDV */
+    .pdv-layout-body {
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background-color: #03060E;
+    }
+    .pdv-main-content {
+      flex: 1 1 0%;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 10px 10px 10px;
+    }
+
+    /* Telas >= 850px: 3 Colunas Lado a Lado (Perfeito para 1014px, 1024px, 1366px, 1920px) */
+    @media (min-width: 850px) {
+      .pdv-mobile-nav {
+        display: none !important;
+      }
+      .pdv-columns-wrapper {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 10px !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+      }
+      .pdv-col-comandas {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 270px !important;
+        min-width: 240px !important;
+        max-width: 290px !important;
+        flex-shrink: 0 !important;
+        height: 100% !important;
+        min-height: 0 !important;
+      }
+      .pdv-col-catalogo {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0% !important;
+        min-width: 320px !important;
+        height: 100% !important;
+        min-height: 0 !important;
+      }
+      .pdv-col-caixa {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        width: 360px !important;
+        min-width: 330px !important;
+        max-width: 390px !important;
+        flex-shrink: 0 !important;
+        height: 100% !important;
+        min-height: 0 !important;
+      }
+    }
+
+    /* Telas < 850px (Tablets e Celulares): Visualização por Abas Elegantes */
+    @media (max-width: 849px) {
+      .pdv-mobile-nav {
+        display: flex !important;
+      }
+      .pdv-columns-wrapper {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+      }
+      .pdv-col-comandas, .pdv-col-catalogo, .pdv-col-caixa {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+      }
+    }
+
     /* Estilos de Impressão Térmica 80mm */
     @media print {
       body * { visibility: hidden; }
@@ -181,9 +262,10 @@ function getPdvHtml() {
       const [finalizando, setFinalizando] = useState(false);
       const [cupomEmitido, setCupomEmitido] = useState(null);
 
-      // Filtros do Catálogo
+      // Filtros do Catálogo e Visualização Responsiva
       const [busca, setBusca] = useState('');
       const [abaCat, setAbaCat] = useState('Todos');
+      const [abaAtivaMobile, setAbaAtivaMobile] = useState('catalogo');
 
       // Modal de Permissionamento & Equipe
       const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
@@ -240,6 +322,22 @@ function getPdvHtml() {
         return () => clearInterval(interval);
       }, []);
 
+      // Atalho de Teclado F2 para Finalizar Venda e Esc para Modais
+      useEffect(() => {
+        const handleKeys = (e) => {
+          if (e.key === 'F2') {
+            e.preventDefault();
+            const btn = document.getElementById('btn-finalizar-venda');
+            if (btn && !btn.disabled) btn.click();
+          } else if (e.key === 'Escape') {
+            setCupomEmitido(null);
+            setModalEquipeAberto(false);
+          }
+        };
+        window.addEventListener('keydown', handleKeys);
+        return () => window.removeEventListener('keydown', handleKeys);
+      }, []);
+
       // Seleção rápida de operadora em 1 clique
       const selecionarOperador = (colab) => {
         const info = {
@@ -268,6 +366,7 @@ function getPdvHtml() {
             imagem_url: prod.imagem_url
           }]);
         }
+        avisar('+1 ' + prod.nome_item + ' adicionado ao caixa!');
       };
 
       // Alterar quantidade
@@ -290,6 +389,7 @@ function getPdvHtml() {
         setLocalConsumo(cmd.local_consumo || '');
         setDesconto(0);
         setValorRecebido('');
+        setAbaAtivaMobile('caixa');
         avisar('Comanda #' + (cmd.numero_comanda || cmd.id_pedido) + ' carregada no caixa!');
       };
 
@@ -401,392 +501,432 @@ function getPdvHtml() {
       return (
         <div className="h-screen w-screen flex flex-col bg-[#03060E] text-[#EAE6DF] overflow-hidden">
           
-          {/* TOPO: BARRA DE OPERAÇÃO PROFISSIONAL */}
-          <header className="bg-celestial-900 border-b border-ouro/30 px-4 py-2.5 flex items-center justify-between shadow-lg shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full border border-ouro/60 bg-celestial-950 p-0.5 flex items-center justify-center shadow-md">
+          {/* TOPO: BARRA DE OPERAÇÃO PROFISSIONAL RESPONSIVA */}
+          <header className="bg-celestial-900 border-b border-ouro/30 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-lg shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-full border border-ouro/60 bg-celestial-950 p-0.5 flex items-center justify-center shadow-md shrink-0">
                 <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover rounded-full" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-serif text-base sm:text-lg font-bold gold-gradient-text tracking-wide">
-                    Vênus &amp; Luar Boutique • PDV Profissional
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h1 className="font-serif text-sm sm:text-base font-bold gold-gradient-text tracking-wide whitespace-nowrap">
+                    Vênus &amp; Luar • PDV
                   </h1>
-                  <span className={"px-2 py-0.5 rounded-full text-[10px] font-bold border " + (statusConexao === 'online' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40')}>
-                    {statusConexao === 'online' ? '🟢 Conectado à Boutique' : '🔴 Modo Offline'}
+                  <span className={"px-2 py-0.5 rounded-full text-[9.5px] font-bold border whitespace-nowrap " + (statusConexao === 'online' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40')}>
+                    {statusConexao === 'online' ? '🟢 Online' : '🔴 Offline'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ouro/80">
-                  <span>Operadora: <strong className="text-ouro">{operador.nome}</strong> ({operador.cargo})</span>
-                  <span>•</span>
-                  <span>Terminal: #CAIXA-01</span>
-                </div>
+                <p className="text-[10px] sm:text-[11px] text-ouro/80 truncate">
+                  Operadora: <strong className="text-ouro">{operador.nome}</strong> • #CAIXA-01
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <button
                 type="button"
                 id="btn-abrir-equipe"
                 onClick={() => setModalEquipeAberto(true)}
-                className="px-3 py-1.5 rounded-xl bg-celestial-950 border border-purple-400/50 hover:bg-purple-950 text-purple-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-celestial-950 border border-purple-400/50 hover:bg-purple-950 text-purple-200 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm whitespace-nowrap"
               >
                 <span>👥</span>
-                <span>Operadores &amp; Permissões</span>
+                <span className="hidden sm:inline">Operadores &amp;</span> Permissões
               </button>
 
               <button
                 type="button"
                 onClick={limparVenda}
-                className="px-3 py-1.5 rounded-xl bg-stone-800/80 border border-stone-600 hover:border-rose-500 text-stone-300 hover:text-rose-400 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1"
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-stone-800/80 border border-stone-600 hover:border-rose-500 text-stone-300 hover:text-rose-400 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
               >
                 <span>🧹</span>
-                <span>Limpar Venda</span>
+                <span>Limpar</span>
               </button>
 
               <a
                 href={BOUTIQUE_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/15 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/15 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
                 title="Abrir a Loja Virtual da Boutique para o Cliente"
               >
                 <span>🌐</span>
-                <span className="hidden sm:inline">Ver Site da Boutique</span>
+                <span className="hidden sm:inline">Ver Site</span>
               </a>
             </div>
           </header>
 
-          {/* CORPO DO PDV: 3 COLUNAS PROFISSIONAIS */}
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 overflow-hidden bg-gradient-to-br from-celestial-950 via-celestial-900 to-celestial-950">
-            
-            {/* COLUNA 1: COMANDAS DIGITAIS DO BISTRÔ / COZINHA (3 colunas lg) */}
-            <div className="lg:col-span-3 bg-celestial-900/90 border border-amber-500/30 rounded-2xl p-3 flex flex-col overflow-hidden shadow-xl">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber-500/30">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">☕</span>
-                  <h2 className="font-serif text-sm font-bold text-amber-300 tracking-wide">
-                    Comandas do Bistrô
-                  </h2>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    {comandas.length}
-                  </span>
-                </div>
-                <span className="text-[10px] text-amber-400/70">Receptor Digital</span>
-              </div>
+          {/* BARRA DE NAVEGAÇÃO DE ABAS PARA TELAS MENORES QUE 850px */}
+          <div className="pdv-mobile-nav items-center justify-between gap-1.5 px-3 py-2 bg-celestial-900 border-b border-ouro/30 shrink-0">
+            <button
+              type="button"
+              onClick={() => setAbaAtivaMobile('comandas')}
+              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'comandas' ? 'bg-amber-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-amber-300 border border-amber-500/30')}
+            >
+              <span>☕ Comandas</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-950 text-amber-200 font-extrabold">{comandas.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtivaMobile('catalogo')}
+              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'catalogo' ? 'bg-ouro text-celestial-950 shadow-md' : 'bg-celestial-950 text-ouro border border-ouro/30')}
+            >
+              <span>🛍️ Catálogo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaAtivaMobile('caixa')}
+              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'caixa' ? 'bg-emerald-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-emerald-300 border border-emerald-500/30')}
+            >
+              <span>🧾 Caixa</span>
+              {itensCaixa.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-200 font-extrabold">
+                  {itensCaixa.reduce((acc, x) => acc + x.quantidade, 0)}
+                </span>
+              )}
+            </button>
+          </div>
 
-              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                {comandas.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-luar-300/60">
-                    <span className="text-3xl mb-2">✨</span>
-                    <p className="text-xs">Nenhum pedido pendente no bistrô.</p>
-                    <p className="text-[10px] text-luar-300/40 mt-1">Solicitações feitas pelos clientes nas mesas/balcão entrarão aqui automaticamente.</p>
-                  </div>
-                ) : (
-                  comandas.map(cmd => (
-                    <div
-                      key={cmd.id_pedido}
-                      className={"p-3 rounded-xl border transition-all text-left " + (comandaSelecionada?.id_pedido === cmd.id_pedido ? 'bg-amber-950/60 border-amber-400 ring-1 ring-amber-400/50 shadow-md' : 'bg-celestial-950/80 border-amber-500/25 hover:border-amber-400/60')}
-                    >
-                      <div className="flex items-start justify-between gap-1 mb-1">
-                        <div>
-                          <span className="text-[11px] font-mono font-bold text-amber-300 block">
-                            #{cmd.numero_comanda || ('BISTRO-' + cmd.id_pedido)}
-                          </span>
-                          <span className="text-xs font-semibold text-luar-100 block">
-                            {cmd.nome_cliente || 'Consumidor'}
-                          </span>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          {cmd.local_consumo || 'Balcão'}
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] text-luar-200/80 mb-2 line-clamp-2">
-                        {cmd.itens?.map(it => it.quantidade + 'x ' + it.nome_item).join(', ')}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-ouro/15">
-                        <span className="font-serif font-bold text-sm text-ouro">
-                          {formatBRL(cmd.total)}
-                        </span>
-                        <button
-                          type="button"
-                          id={'btn-puxar-' + cmd.id_pedido}
-                          onClick={() => puxarComanda(cmd)}
-                          className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-ouro hover:from-ouro hover:to-amber-500 text-celestial-950 text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1"
-                        >
-                          <span>⚡</span>
-                          <span>Puxar</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* COLUNA 2: CATÁLOGO PROFISSIONAL DE PRODUTOS FÍSICOS (5 colunas lg) */}
-            <div className="lg:col-span-5 bg-celestial-900/90 border border-ouro/30 rounded-2xl p-3 flex flex-col overflow-hidden shadow-xl">
-              {/* Busca e Filtros */}
-              <div className="space-y-2 pb-2 mb-2 border-b border-ouro/20">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    id="input-busca-pdv"
-                    value={busca}
-                    onChange={e => setBusca(e.target.value)}
-                    placeholder="🔍 Buscar produto por nome ou código..."
-                    className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-1.5 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
-                  />
-                  {busca && (
-                    <button type="button" onClick={() => setBusca('')} className="text-xs text-ouro px-2">×</button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-                  {['Todos', 'Cafeteria', 'Moda', 'Pet'].map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setAbaCat(c)}
-                      className={"px-2.5 py-1 rounded-lg text-[10.5px] font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer " + (abaCat === c ? 'bg-ouro text-celestial-950 shadow-sm' : 'bg-celestial-950 text-luar-200 hover:text-ouro border border-ouro/20')}
-                    >
-                      {c === 'Cafeteria' ? '☕ Bistrô' : (c === 'Moda' ? '👗 Moda' : (c === 'Pet' ? '🐾 Pet' : '✨ Todos'))}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid de Produtos */}
-              <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1">
-                {produtos
-                  .filter(p => {
-                    const matchCat = abaCat === 'Todos' || p.categoria === abaCat;
-                    const matchBusca = !busca || p.nome_item.toLowerCase().includes(busca.toLowerCase());
-                    return matchCat && matchBusca;
-                  })
-                  .map(p => {
-                    const ehAlimento = p.categoria === 'Cafeteria';
-                    const estoqueNum = p.estoque !== undefined ? Number(p.estoque) : 10;
-                    const esgotado = !ehAlimento && estoqueNum <= 0;
-
-                    return (
-                      <div
-                        key={p.id_produto}
-                        id={'prod-card-' + p.id_produto}
-                        onClick={() => !esgotado && adicionarItem(p)}
-                        className={"group p-2 rounded-xl border transition-all flex flex-col justify-between text-left " + (esgotado ? 'opacity-40 cursor-not-allowed bg-stone-900 border-stone-800' : 'cursor-pointer bg-celestial-950/80 border-ouro/25 hover:border-ouro hover:bg-celestial-950 hover:shadow-md')}
-                      >
-                        <div className="space-y-1.5">
-                          <div className="w-full h-20 rounded-lg overflow-hidden bg-celestial-900 relative">
-                            <img src={p.imagem_url} alt={p.nome_item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-black/75 text-ouro border border-ouro/30">
-                              {p.categoria === 'Cafeteria' ? 'Bistrô' : p.categoria}
-                            </span>
-                          </div>
-                          <h3 className="text-[11px] font-bold text-luar-100 line-clamp-1 leading-snug group-hover:text-ouro">
-                            {p.nome_item}
-                          </h3>
-                        </div>
-
-                        <div className="mt-1.5 pt-1.5 border-t border-ouro/15 flex items-center justify-between">
-                          <span className="font-serif font-bold text-xs text-ouro">
-                            {formatBRL(p.preco)}
-                          </span>
-                          {ehAlimento ? (
-                            <span className="text-[9px] text-amber-400 font-semibold">☕ Fresco</span>
-                          ) : esgotado ? (
-                            <span className="text-[9px] text-rose-400 font-bold">Esgotado</span>
-                          ) : estoqueNum === 1 ? (
-                            <span className="text-[9px] text-amber-300 font-bold">1 un</span>
-                          ) : (
-                            <span className="text-[9px] text-emerald-400 font-semibold">{estoqueNum} un</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-
-            {/* COLUNA 3: CUPOM ATIVO & FINALIZAÇÃO NO CAIXA (4 colunas lg) */}
-            <div className="lg:col-span-4 bg-celestial-900/95 border-2 border-ouro/50 rounded-2xl p-3 flex flex-col justify-between overflow-hidden shadow-2xl">
-              {/* Header do Cupom */}
-              <div className="space-y-2 pb-2 border-b border-ouro/30">
-                <div className="flex items-center justify-between">
+          {/* CORPO DO PDV: 3 COLUNAS PROFISSIONAIS (LADO A LADO >= 850px) */}
+          <div className="pdv-main-content">
+            <div className="pdv-columns-wrapper">
+              
+              {/* COLUNA 1: COMANDAS DIGITAIS DO BISTRÔ */}
+              <div className={"pdv-col-comandas bg-celestial-900/90 border border-amber-500/30 rounded-2xl p-2.5 sm:p-3 flex flex-col overflow-hidden shadow-xl " + (abaAtivaMobile !== 'comandas' ? 'hidden' : 'flex')}>
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber-500/30 shrink-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-base">🧾</span>
-                    <h2 className="font-serif text-sm font-bold gold-gradient-text tracking-wide">
-                      Venda Ativa
+                    <span className="text-base">☕</span>
+                    <h2 className="font-serif text-sm font-bold text-amber-300 tracking-wide">
+                      Comandas do Bistrô
                     </h2>
-                  </div>
-                  {comandaSelecionada && (
-                    <div className="flex items-center gap-1">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                        Comanda #{comandaSelecionada.numero_comanda || comandaSelecionada.id_pedido}
-                      </span>
-                      <button type="button" onClick={() => setComandaSelecionada(null)} className="text-stone-400 hover:text-rose-400 text-xs px-1">×</button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-left">
-                  <div>
-                    <label className="text-[9.5px] uppercase font-bold text-ouro/70 block">Cliente</label>
-                    <input
-                      type="text"
-                      id="input-cliente-nome"
-                      value={clienteNome}
-                      onChange={e => setClienteNome(e.target.value)}
-                      placeholder="Consumidor Final"
-                      className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9.5px] uppercase font-bold text-ouro/70 block">CPF na Nota</label>
-                    <input
-                      type="text"
-                      id="input-cliente-cpf"
-                      value={clienteCpf}
-                      onChange={e => setClienteCpf(formatarCpf(e.target.value))}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                      className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de Itens do Cupom */}
-              <div className="flex-1 overflow-y-auto space-y-1.5 my-2 pr-1 min-h-[140px]">
-                {itensCaixa.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-luar-300/60">
-                    <span className="text-3xl mb-1">🛒</span>
-                    <p className="text-xs">Nenhum item na venda atual.</p>
-                    <p className="text-[10px] text-luar-300/40 mt-1">Puxe uma comanda do bistrô ou clique nos produtos ao lado.</p>
-                  </div>
-                ) : (
-                  itensCaixa.map(it => (
-                    <div key={it.id_produto} className="flex items-center justify-between p-2 rounded-xl bg-celestial-950/70 border border-ouro/20 text-xs">
-                      <div className="flex-1 pr-2 text-left">
-                        <span className="font-semibold text-luar-100 block line-clamp-1">{it.nome_item}</span>
-                        <span className="text-[10px] text-ouro/70">{formatBRL(it.preco)} cada</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => alterarQtd(it.id_produto, -1)} className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs">-</button>
-                        <span className="font-bold text-xs w-4 text-center">{it.quantidade}</span>
-                        <button type="button" onClick={() => alterarQtd(it.id_produto, 1)} className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs">+</button>
-                      </div>
-                      <span className="font-serif font-bold text-ouro text-xs w-16 text-right">
-                        {formatBRL(Number(it.preco) * Number(it.quantidade))}
-                      </span>
-                      <button type="button" onClick={() => setItensCaixa(itensCaixa.filter(x => x.id_produto !== it.id_produto))} className="text-stone-400 hover:text-rose-400 ml-1.5 text-xs font-bold">×</button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Totais & Formas de Pagamento */}
-              <div className="space-y-2 pt-2 border-t border-ouro/30 bg-celestial-950/80 -mx-3 -mb-3 p-3 rounded-b-2xl">
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between items-center text-luar-300">
-                    <span>Subtotal:</span>
-                    <span>{formatBRL(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-luar-300">
-                    <span>Desconto (R$):</span>
-                    <input
-                      type="number"
-                      id="input-desconto"
-                      value={desconto}
-                      onChange={e => setDesconto(Math.max(0, Number(e.target.value)))}
-                      min="0"
-                      step="0.5"
-                      className="w-20 bg-celestial-900 border border-ouro/30 rounded px-1.5 py-0.5 text-right text-xs text-ouro focus:outline-none focus:border-ouro"
-                    />
-                  </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-ouro/20 font-bold">
-                    <span className="text-sm gold-gradient-text uppercase">Total a Pagar:</span>
-                    <span className="text-lg text-ouro font-serif" id="mostrador-total-final">
-                      {formatBRL(totalFinal)}
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {comandas.length}
                     </span>
                   </div>
+                  <span className="text-[9.5px] font-bold text-amber-400/80 uppercase">Receptor Digital</span>
                 </div>
 
-                {/* Seletor de Pagamento */}
-                <div className="grid grid-cols-4 gap-1 pt-1">
-                  {[
-                    { id: 'Dinheiro', label: 'Dinheiro', icone: '💵' },
-                    { id: 'Cartão de Crédito', label: 'Crédito', icone: '💳' },
-                    { id: 'Cartão de Débito', label: 'Débito', icone: '💳' },
-                    { id: 'PIX Instantâneo', label: 'PIX', icone: '📱' }
-                  ].map(fp => (
-                    <button
-                      key={fp.id}
-                      type="button"
-                      id={'btn-fp-' + fp.id.replace(/\s+/g, '')}
-                      onClick={() => setFormaPagamento(fp.id)}
-                      className={"py-1 px-1 rounded-lg text-[10px] font-bold flex flex-col items-center justify-center transition-all cursor-pointer " + (formaPagamento === fp.id ? 'bg-ouro text-celestial-950 ring-2 ring-ouro-light shadow-md' : 'bg-celestial-900 border border-ouro/30 text-luar-200 hover:text-ouro')}
-                    >
-                      <span className="text-xs">{fp.icone}</span>
-                      <span>{fp.label}</span>
-                    </button>
-                  ))}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                  {comandas.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 text-luar-300/60">
+                      <span className="text-3xl mb-2">✨</span>
+                      <p className="text-xs font-semibold">Nenhum pedido pendente.</p>
+                      <p className="text-[10px] text-luar-300/40 mt-1">Pedidos de mesas/balcão entrarão aqui automaticamente em tempo real.</p>
+                    </div>
+                  ) : (
+                    comandas.map(cmd => (
+                      <div
+                        key={cmd.id_pedido}
+                        className={"p-2.5 rounded-xl border transition-all text-left " + (comandaSelecionada?.id_pedido === cmd.id_pedido ? 'bg-amber-950/70 border-amber-400 ring-1 ring-amber-400/60 shadow-md' : 'bg-celestial-950/90 border-amber-500/25 hover:border-amber-400/60')}
+                      >
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <div>
+                            <span className="text-[10.5px] font-mono font-bold text-amber-300 block">
+                              #{cmd.numero_comanda || ('BISTRO-' + cmd.id_pedido)}
+                            </span>
+                            <span className="text-xs font-bold text-luar-100 block">
+                              {cmd.nome_cliente || 'Consumidor'}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md text-[9.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                            {cmd.local_consumo || 'Balcão'}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] text-luar-200/80 mb-2 line-clamp-2 leading-tight">
+                          {cmd.itens?.map(it => it.quantidade + 'x ' + it.nome_item).join(', ')}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-ouro/15">
+                          <span className="font-serif font-bold text-sm text-ouro">
+                            {formatBRL(cmd.total)}
+                          </span>
+                          <button
+                            type="button"
+                            id={'btn-puxar-' + cmd.id_pedido}
+                            onClick={() => puxarComanda(cmd)}
+                            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-ouro hover:from-ouro hover:to-amber-500 text-celestial-950 text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1 active:scale-95"
+                          >
+                            <span>⚡</span>
+                            <span>Puxar</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* COLUNA 2: CATÁLOGO PROFISSIONAL DE PRODUTOS FÍSICOS */}
+              <div className={"pdv-col-catalogo bg-celestial-900/90 border border-ouro/30 rounded-2xl p-2.5 sm:p-3 flex flex-col overflow-hidden shadow-xl " + (abaAtivaMobile !== 'catalogo' ? 'hidden' : 'flex')}>
+                {/* Busca e Filtros */}
+                <div className="space-y-2 pb-2 mb-2 border-b border-ouro/20 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      id="input-busca-pdv"
+                      value={busca}
+                      onChange={e => setBusca(e.target.value)}
+                      placeholder="🔍 Buscar produto por nome ou código..."
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-1.5 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                    />
+                    {busca && (
+                      <button type="button" onClick={() => setBusca('')} className="text-xs text-ouro px-2 cursor-pointer font-bold">×</button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                    {['Todos', 'Cafeteria', 'Moda', 'Pet'].map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setAbaCat(c)}
+                        className={"px-2.5 py-1 rounded-lg text-[10.5px] font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer " + (abaCat === c ? 'bg-ouro text-celestial-950 shadow-sm' : 'bg-celestial-950 text-luar-200 hover:text-ouro border border-ouro/20')}
+                      >
+                        {c === 'Cafeteria' ? '☕ Bistrô' : (c === 'Moda' ? '👗 Moda' : (c === 'Pet' ? '🐾 Pet' : '✨ Todos'))}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Se Dinheiro: Campo Valor Recebido e Troco em Tempo Real */}
-                {formaPagamento === 'Dinheiro' && (
-                  <div className="p-2 rounded-xl bg-celestial-900 border border-amber-500/30 space-y-1.5 text-left animate-fadeIn">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] font-bold uppercase text-amber-300">Valor Recebido (R$):</label>
+                {/* Grid de Produtos */}
+                <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 pr-1 min-h-0">
+                  {produtos
+                    .filter(p => {
+                      const matchCat = abaCat === 'Todos' || p.categoria === abaCat;
+                      const matchBusca = !busca || p.nome_item.toLowerCase().includes(busca.toLowerCase());
+                      return matchCat && matchBusca;
+                    })
+                    .map(p => {
+                      const ehAlimento = p.categoria === 'Cafeteria';
+                      const estoqueNum = p.estoque !== undefined ? Number(p.estoque) : 10;
+                      const esgotado = !ehAlimento && estoqueNum <= 0;
+
+                      return (
+                        <div
+                          key={p.id_produto}
+                          id={'prod-card-' + p.id_produto}
+                          onClick={() => !esgotado && adicionarItem(p)}
+                          className={"group p-2 rounded-xl border transition-all flex flex-col justify-between text-left " + (esgotado ? 'opacity-40 cursor-not-allowed bg-stone-900 border-stone-800' : 'cursor-pointer bg-celestial-950/80 border-ouro/25 hover:border-ouro hover:bg-celestial-950 hover:shadow-md')}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="w-full h-24 rounded-lg overflow-hidden bg-celestial-900 relative">
+                              <img src={p.imagem_url} alt={p.nome_item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                              <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-black/80 text-ouro border border-ouro/30 backdrop-blur-sm">
+                                {p.categoria === 'Cafeteria' ? 'Bistrô' : p.categoria}
+                              </span>
+                              {ehAlimento ? (
+                                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-950/90 text-amber-300 border border-amber-500/40">
+                                  ☕ Fresco
+                                </span>
+                              ) : esgotado ? (
+                                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-950/90 text-rose-300 border border-rose-500/40">
+                                  Esgotado
+                                </span>
+                              ) : estoqueNum === 1 ? (
+                                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-950/90 text-amber-300 border border-amber-400 animate-pulse">
+                                  ⚡ 1 un
+                                </span>
+                              ) : (
+                                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-celestial-950/90 text-emerald-400 border border-emerald-500/30">
+                                  📦 {estoqueNum} un
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-[11px] font-bold text-luar-100 line-clamp-1 leading-snug group-hover:text-ouro">
+                              {p.nome_item}
+                            </h3>
+                          </div>
+
+                          <div className="mt-1.5 pt-1.5 border-t border-ouro/15 flex items-center justify-between">
+                            <span className="font-serif font-bold text-xs text-ouro">
+                              {formatBRL(p.preco)}
+                            </span>
+                            <span className="text-[9.5px] text-ouro/70 group-hover:text-ouro font-bold">+ Caixa</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* COLUNA 3: CUPOM ATIVO & FINALIZAÇÃO NO CAIXA */}
+              <div className={"pdv-col-caixa bg-celestial-900/95 border-2 border-ouro/50 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between overflow-hidden shadow-2xl " + (abaAtivaMobile !== 'caixa' ? 'hidden' : 'flex')}>
+                {/* Header do Cupom */}
+                <div className="space-y-1.5 pb-2 border-b border-ouro/30 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">🧾</span>
+                      <h2 className="font-serif text-sm font-bold gold-gradient-text tracking-wide">
+                        Venda Ativa
+                      </h2>
+                    </div>
+                    {comandaSelecionada && (
+                      <div className="flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          #{comandaSelecionada.numero_comanda || comandaSelecionada.id_pedido}
+                        </span>
+                        <button type="button" onClick={() => setComandaSelecionada(null)} className="text-stone-400 hover:text-rose-400 text-xs px-1 cursor-pointer">×</button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-left">
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-ouro/70 block">Cliente</label>
                       <input
-                        type="number"
-                        id="input-valor-recebido"
-                        value={valorRecebido}
-                        onChange={e => setValorRecebido(e.target.value)}
-                        placeholder="0,00"
-                        step="any"
-                        className="w-24 bg-celestial-950 border border-amber-400/50 rounded-lg px-2 py-1 text-right text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        type="text"
+                        id="input-cliente-nome"
+                        value={clienteNome}
+                        onChange={e => setClienteNome(e.target.value)}
+                        placeholder="Consumidor Final"
+                        className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
                       />
                     </div>
-
-                    <div className="flex items-center gap-1 justify-end text-[10px]">
-                      <button type="button" onClick={() => setValorRecebido(totalFinal.toFixed(2))} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20">Exato</button>
-                      <button type="button" onClick={() => setValorRecebido((Math.ceil(totalFinal / 10) * 10).toFixed(2))} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20">+Próx. R$ 10</button>
-                      <button type="button" onClick={() => setValorRecebido('50.00')} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20">R$ 50</button>
-                      <button type="button" id="btn-atalho-cem" onClick={() => setValorRecebido('100.00')} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20">R$ 100</button>
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-ouro/70 block">CPF na Nota</label>
+                      <input
+                        type="text"
+                        id="input-cliente-cpf"
+                        value={clienteCpf}
+                        onChange={e => setClienteCpf(formatarCpf(e.target.value))}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro font-mono"
+                      />
                     </div>
+                  </div>
+                </div>
 
-                    <div className="pt-1 flex items-center justify-between text-xs font-bold border-t border-ouro/15">
-                      <span>Troco a Devolver:</span>
-                      <span id="mostrador-troco" className={"text-sm font-serif " + (troco > 0 ? 'text-emerald-400' : 'text-luar-300')}>
-                        {formatBRL(troco)}
+                {/* Lista de Itens do Cupom */}
+                <div className="flex-1 overflow-y-auto space-y-1 my-1.5 pr-1 min-h-[90px]">
+                  {itensCaixa.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-3 text-luar-300/60">
+                      <span className="text-2xl mb-1">🛒</span>
+                      <p className="text-xs font-semibold">Nenhum item na venda atual.</p>
+                      <p className="text-[10px] text-luar-300/40 mt-0.5">Puxe uma comanda do bistrô ou clique nos produtos ao lado.</p>
+                    </div>
+                  ) : (
+                    itensCaixa.map(it => (
+                      <div key={it.id_produto} className="flex items-center justify-between p-1.5 rounded-xl bg-celestial-950/70 border border-ouro/20 text-xs">
+                        <div className="flex-1 pr-2 text-left">
+                          <span className="font-semibold text-luar-100 block line-clamp-1">{it.nome_item}</span>
+                          <span className="text-[10px] text-ouro/70">{formatBRL(it.preco)} cada</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" onClick={() => alterarQtd(it.id_produto, -1)} className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs cursor-pointer">-</button>
+                          <span className="font-bold text-xs w-4 text-center">{it.quantidade}</span>
+                          <button type="button" onClick={() => alterarQtd(it.id_produto, 1)} className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs cursor-pointer">+</button>
+                        </div>
+                        <span className="font-serif font-bold text-ouro text-xs w-16 text-right">
+                          {formatBRL(Number(it.preco) * Number(it.quantidade))}
+                        </span>
+                        <button type="button" onClick={() => setItensCaixa(itensCaixa.filter(x => x.id_produto !== it.id_produto))} className="text-stone-400 hover:text-rose-400 ml-1.5 text-xs font-bold cursor-pointer">×</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Totais & Formas de Pagamento (Pinned no Rodapé) */}
+                <div className="space-y-1.5 pt-2 border-t border-ouro/30 bg-celestial-950/90 -mx-2.5 sm:-mx-3 -mb-2.5 sm:-mb-3 p-2.5 sm:p-3 rounded-b-2xl shrink-0">
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between items-center text-luar-300">
+                      <span>Subtotal:</span>
+                      <span>{formatBRL(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-luar-300">
+                      <span>Desconto (R$):</span>
+                      <input
+                        type="number"
+                        id="input-desconto"
+                        value={desconto}
+                        onChange={e => setDesconto(Math.max(0, Number(e.target.value)))}
+                        min="0"
+                        step="0.5"
+                        className="w-20 bg-celestial-900 border border-ouro/30 rounded px-1.5 py-0.5 text-right text-xs text-ouro focus:outline-none focus:border-ouro"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center pt-1 border-t border-ouro/20 font-bold">
+                      <span className="text-xs uppercase text-ouro/90">Total a Pagar:</span>
+                      <span className="text-base text-ouro font-serif" id="mostrador-total-final">
+                        {formatBRL(totalFinal)}
                       </span>
                     </div>
                   </div>
-                )}
 
-                {/* Botão de Finalização da Venda */}
-                <button
-                  type="button"
-                  id="btn-finalizar-venda"
-                  onClick={finalizarVenda}
-                  disabled={finalizando || itensCaixa.length === 0}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-500 hover:brightness-110 text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {finalizando ? (
-                    <span>⏳ Liquidando Venda no Caixa...</span>
-                  ) : (
-                    <>
-                      <span>✨ Finalizar Venda &amp; Emitir Cupom</span>
-                      <span>(F2)</span>
-                    </>
+                  {/* Seletor de Pagamento */}
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    {[
+                      { id: 'Dinheiro', label: 'Dinheiro', icone: '💵' },
+                      { id: 'Cartão de Crédito', label: 'Crédito', icone: '💳' },
+                      { id: 'Cartão de Débito', label: 'Débito', icone: '💳' },
+                      { id: 'PIX Instantâneo', label: 'PIX', icone: '📱' }
+                    ].map(fp => (
+                      <button
+                        key={fp.id}
+                        type="button"
+                        id={'btn-fp-' + fp.id.replace(/\s+/g, '')}
+                        onClick={() => setFormaPagamento(fp.id)}
+                        className={"py-1 px-1 rounded-lg text-[9.5px] font-bold flex flex-col items-center justify-center transition-all cursor-pointer " + (formaPagamento === fp.id ? 'bg-ouro text-celestial-950 ring-2 ring-ouro-light shadow-md' : 'bg-celestial-900 border border-ouro/30 text-luar-200 hover:text-ouro')}
+                      >
+                        <span className="text-xs">{fp.icone}</span>
+                        <span>{fp.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Se Dinheiro: Campo Valor Recebido e Troco em Tempo Real */}
+                  {formaPagamento === 'Dinheiro' && (
+                    <div className="p-2 rounded-xl bg-celestial-900 border border-amber-500/30 space-y-1 text-left animate-fadeIn">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[9.5px] font-bold uppercase text-amber-300">Recebido (R$):</label>
+                        <input
+                          type="number"
+                          id="input-valor-recebido"
+                          value={valorRecebido}
+                          onChange={e => setValorRecebido(e.target.value)}
+                          placeholder="0,00"
+                          step="any"
+                          className="w-24 bg-celestial-950 border border-amber-400/50 rounded-lg px-2 py-0.5 text-right text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1 justify-end text-[9.5px]">
+                        <button type="button" id="btn-atalho-exato" onClick={() => setValorRecebido(totalFinal.toFixed(2))} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20 cursor-pointer">Exato</button>
+                        <button type="button" id="btn-atalho-dez" onClick={() => setValorRecebido((Math.ceil(totalFinal / 10) * 10).toFixed(2))} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20 cursor-pointer">+10</button>
+                        <button type="button" id="btn-atalho-cinquenta" onClick={() => setValorRecebido('50.00')} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20 cursor-pointer">R$ 50</button>
+                        <button type="button" id="btn-atalho-cem" onClick={() => setValorRecebido('100.00')} className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20 cursor-pointer">R$ 100</button>
+                      </div>
+
+                      <div className="pt-1 flex items-center justify-between text-xs font-bold border-t border-ouro/15">
+                        <span className="text-[11px] text-amber-200">Troco a Devolver:</span>
+                        <span id="mostrador-troco" className={"text-base font-serif font-bold " + (troco > 0 ? 'text-emerald-400 animate-pulse' : 'text-luar-300')}>
+                          {formatBRL(troco)}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                </button>
-              </div>
-            </div>
 
+                  {/* Botão de Finalização da Venda */}
+                  <button
+                    type="button"
+                    id="btn-finalizar-venda"
+                    onClick={finalizarVenda}
+                    disabled={finalizando || itensCaixa.length === 0}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-500 hover:brightness-110 text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-98"
+                  >
+                    {finalizando ? (
+                      <span>⏳ Liquidando Venda no Caixa...</span>
+                    ) : (
+                      <>
+                        <span>✨ Finalizar Venda &amp; Emitir Cupom</span>
+                        <span>(F2)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+            </div>
           </div>
 
           {/* ==================================================================== */}

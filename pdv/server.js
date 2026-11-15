@@ -405,12 +405,19 @@ function getPdvHtml() {
         carregarDados();
         const interval = setInterval(async () => {
           try {
-            const res = await fetch('/api/pdv/comandas');
-            if (res.ok) {
-              const data = await res.json();
+            const [resC, resCli] = await Promise.all([
+              fetch('/api/pdv/comandas'),
+              fetch('/api/pdv/clientes')
+            ]);
+            if (resC.ok) {
+              const data = await resC.json();
               setComandas(data);
-              setStatusConexao('online');
             }
+            if (resCli.ok) {
+              const cliData = await resCli.json();
+              setClientes(cliData);
+            }
+            setStatusConexao('online');
           } catch(e) {
             setStatusConexao('offline');
           }
@@ -724,14 +731,15 @@ function getPdvHtml() {
         }
       };
 
-      // Clientes filtrados na busca inteligente
+      // Clientes filtrados na busca inteligente (busca instantânea por Nome, E-mail ou CPF)
       const clientesFiltrados = buscaCliente.trim()
         ? clientes.filter(c => {
-            const b = buscaCliente.toLowerCase().replace(/\\D/g, '');
-            const bTexto = buscaCliente.toLowerCase();
+            const bCpf = buscaCliente.toLowerCase().replace(/\\D/g, '');
+            const bTexto = buscaCliente.toLowerCase().trim();
             const matchNome = (c.nome || c.nome_completo || '').toLowerCase().includes(bTexto);
-            const matchCpf = b && (c.cpf || '').replace(/\\D/g, '').includes(b);
-            return matchNome || matchCpf;
+            const matchEmail = (c.email || '').toLowerCase().includes(bTexto);
+            const matchCpf = bCpf.length > 0 && (c.cpf || '').replace(/\\D/g, '').includes(bCpf);
+            return matchNome || matchEmail || matchCpf;
           })
         : [];
 
@@ -1148,8 +1156,11 @@ function getPdvHtml() {
                               setBuscaCliente(e.target.value);
                               setMostrarSugestoesCliente(true);
                             }}
-                            onFocus={() => setMostrarSugestoesCliente(true)}
-                            placeholder="🔍 Buscar cliente por Nome ou CPF..."
+                            onFocus={() => {
+                              setMostrarSugestoesCliente(true);
+                              fetch('/api/pdv/clientes').then(r => r.ok && r.json()).then(d => d && setClientes(d));
+                            }}
+                            placeholder="🔍 Buscar cliente por Nome, E-mail ou CPF..."
                             className="w-full bg-celestial-900 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
                           />
                           {buscaCliente && (
@@ -1168,7 +1179,7 @@ function getPdvHtml() {
 
                         {/* Dropdown de Clientes Encontrados */}
                         {mostrarSugestoesCliente && buscaCliente && (
-                          <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-celestial-900 border border-ouro/50 rounded-xl shadow-2xl max-h-48 overflow-y-auto divide-y divide-ouro/15">
+                          <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-celestial-900 border border-ouro/50 rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-ouro/15">
                             {clientesFiltrados.length === 0 ? (
                               <div className="p-2.5 text-center text-xs text-luar-300/70">
                                 <p>Nenhum cliente PF encontrado.</p>
@@ -1197,11 +1208,23 @@ function getPdvHtml() {
                                   }}
                                   className="p-2 hover:bg-ouro/15 cursor-pointer flex items-center justify-between transition-all"
                                 >
-                                  <div>
-                                    <span className="text-xs font-bold text-luar-100 block">{c.nome || c.nome_completo}</span>
-                                    <span className="text-[10px] font-mono text-ouro/80">CPF: {formatarCpf(c.cpf)}</span>
+                                  <div className="min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-bold text-luar-100">{c.nome || c.nome_completo}</span>
+                                      <span className="text-[8.5px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 font-semibold whitespace-nowrap">
+                                        🌐 Boutique
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-luar-300/80">
+                                      {c.cpf ? (
+                                        <span className="font-mono text-ouro font-semibold">CPF: {formatarCpf(c.cpf)}</span>
+                                      ) : (
+                                        <span className="text-amber-400 font-semibold">⚠️ CPF Pendente</span>
+                                      )}
+                                      <span className="text-luar-300/50 truncate max-w-[130px]">{c.email}</span>
+                                    </div>
                                   </div>
-                                  <span className="text-[10px] text-emerald-400 font-bold">Selecionar →</span>
+                                  <span className="text-[10px] text-emerald-400 font-bold shrink-0">Selecionar →</span>
                                 </div>
                               ))
                             )}
@@ -2165,14 +2188,15 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/pdv/clientes' && req.method === 'GET') {
     const usuarios = carregarJson(USERS_FILE, []);
     const clientesPf = usuarios
-      .filter(u => u.role === 'cliente' || u.tipo_documento === 'Pessoa Física' || u.cpf)
+      .filter(u => u.role !== 'admin' && !u.cargo)
       .map(u => ({
         id_usuario: u.id_usuario,
         nome: u.nome_completo || u.nome || 'Cliente Vênus e Luar',
         nome_completo: u.nome_completo || u.nome || 'Cliente Vênus e Luar',
-        cpf: formatarCpf(u.cpf),
+        cpf: u.cpf ? formatarCpf(u.cpf) : '',
         email: u.email,
-        telefone: u.telefone || '(11) 98765-4321',
+        telefone: u.telefone || '',
+        origem: 'Cadastro da Boutique',
         tipo_documento: 'Pessoa Física'
       }));
     res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -11851,6 +11851,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           email: emailNormalizado,
           data_nascimento: data_nascimento.trim(),
           cpf: cpfFormatado,
+          tipo_documento: 'Pessoa Física',
           endereco: null,
           senha_hash: gerarHashScrypt(senha),
           role: papelFinal,

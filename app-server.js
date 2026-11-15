@@ -2192,21 +2192,6 @@ function getFrontendHtml() {
                   >
                     Adoção
                   </button>
-
-                  {usuario?.role === 'admin' && (
-                    <button
-                      id="btn-nav-estoque-admin"
-                      onClick={() => {
-                        setIsAdminOpen(true);
-                        setAbaGestao('produtos');
-                      }}
-                      className="px-2.5 xl:px-3.5 py-1 rounded-full text-[10px] xl:text-[11px] font-bold tracking-[0.08em] uppercase transition-all duration-200 whitespace-nowrap cursor-pointer text-emerald-300 bg-emerald-950/80 hover:bg-emerald-500/30 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
-                      title="Abrir Gestão de Estoque (Admin)"
-                    >
-                      <span>📦</span>
-                      <span>Estoque</span>
-                    </button>
-                  )}
                 </nav>
 
                 {/* Ações da Barra: Gestão, Conta e Sacola (Perfeito em Celular, Tablet e Notebook) */}
@@ -2611,100 +2596,144 @@ function getFrontendHtml() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {produtosFiltrados.map(prod => (
                   <div key={prod.id_produto} className="bg-celestial-900 rounded-2xl border border-ouro/20 overflow-hidden shadow-lg hover:border-ouro/60 transition-all duration-300 flex flex-col justify-between group">
                     <div>
+                      {/* Imagem do Produto com Badges Fluidos Responsivos */}
                       <div className="relative aspect-square overflow-hidden bg-celestial-950">
                         <img src={prod.imagem_url} alt={prod.nome_item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-celestial-950/90 border border-ouro/40 text-ouro shadow">
-                          {prod.categoria}
-                        </span>
-
-                        {/* Alerta de Última Peça ou Esgotado sobre a imagem */}
-                        {prod.categoria === 'Cafeteria' ? (
-                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-200 border border-amber-500/40 shadow-xl flex items-center gap-1 font-sans backdrop-blur-sm">
-                            <span>☕</span>
-                            <span>Preparo Fresco</span>
+                        
+                        <div className="absolute top-2.5 sm:top-3 left-2.5 sm:left-3 right-2.5 sm:right-3 flex items-center justify-between gap-1.5 pointer-events-none">
+                          <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-widest px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-celestial-950/90 border border-ouro/40 text-ouro shadow shrink-0">
+                            {prod.categoria}
                           </span>
-                        ) : (
-                          <>
-                            {prod.estoque === 1 && (
-                              <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500 text-celestial-950 border border-amber-300 shadow-xl animate-pulse flex items-center gap-1 font-sans">
-                                <span>⚠️</span>
-                                <span>Última peça em estoque</span>
-                              </span>
-                            )}
-                            {prod.estoque === 0 && (
-                              <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-rose-600 text-white border border-rose-300 shadow-xl flex items-center gap-1 font-sans">
-                                <span>✕</span>
-                                <span>Esgotado</span>
-                              </span>
-                            )}
-                          </>
-                        )}
+
+                          {prod.categoria === 'Cafeteria' ? (
+                            <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-950/90 text-amber-200 border border-amber-500/50 shadow-xl flex items-center gap-1 font-sans backdrop-blur-sm shrink-0">
+                              <span>☕</span>
+                              <span>Preparo Fresco</span>
+                            </span>
+                          ) : (
+                            <>
+                              {prod.estoque === 1 && (
+                                <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500 text-celestial-950 border border-amber-300 shadow-xl animate-pulse flex items-center gap-1 font-sans shrink-0">
+                                  <span>⚠️</span>
+                                  <span>Última peça</span>
+                                </span>
+                              )}
+                              {prod.estoque === 0 && (
+                                <span className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-rose-600 text-white border border-rose-300 shadow-xl flex items-center gap-1 font-sans shrink-0">
+                                  <span>✕</span>
+                                  <span>Esgotado</span>
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="p-5 space-y-2">
+                      {/* Corpo do Card com Alturas Uniformes */}
+                      <div className="p-4 sm:p-5 space-y-2">
                         <h3 
                           onClick={() => setProdutoModal(prod)}
-                          className="font-serif text-base font-bold text-ouro-light hover:text-ouro cursor-pointer transition-colors line-clamp-1"
+                          className="font-serif text-base sm:text-lg font-bold text-ouro-light hover:text-ouro cursor-pointer transition-colors line-clamp-1"
+                          title={prod.nome_item}
                         >
                           {prod.nome_item}
                         </h3>
-                        <p className="text-xs text-luar-300 line-clamp-2 leading-relaxed font-light">
+                        <p className="text-xs text-luar-300 line-clamp-2 leading-relaxed font-light min-h-[2rem]">
                           {prod.descricao}
                         </p>
 
                         {/* Badges de Atributos JSONB */}
-                        <div className="flex flex-wrap gap-1.5 pt-2">
-                          {prod.atributos?.tecido && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Tecido: {prod.atributos.tecido}</span>}
-                          {prod.atributos?.tamanho && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Tam: {prod.atributos.tamanho}</span>}
-                          {prod.atributos?.tipo_leite && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Leite: {prod.atributos.tipo_leite}</span>}
-                          {prod.atributos?.tamanho_pet && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Porte: {prod.atributos.tamanho_pet}</span>}
+                        <div className="flex flex-wrap gap-1 pt-1 min-h-[24px]">
+                          {prod.atributos?.tecido && <span className="text-[9.5px] sm:text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Tecido: {prod.atributos.tecido}</span>}
+                          {prod.atributos?.tamanho && <span className="text-[9.5px] sm:text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Tam: {prod.atributos.tamanho}</span>}
+                          {prod.atributos?.tipo_leite && <span className="text-[9.5px] sm:text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Leite: {prod.atributos.tipo_leite}</span>}
+                          {prod.atributos?.tamanho_pet && <span className="text-[9.5px] sm:text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Porte: {prod.atributos.tamanho_pet}</span>}
                         </div>
 
                         {/* Alerta de Estoque Crítico no Corpo do Card ou Aviso de Bistrô */}
-                        {prod.categoria === 'Cafeteria' ? (
-                          <div className="pt-2">
-                            <span className="text-[11px] font-medium text-amber-200/90 flex items-center gap-1.5 bg-amber-950/30 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                        <div className="pt-1 min-h-[28px] flex items-center">
+                          {prod.categoria === 'Cafeteria' ? (
+                            <span className="text-[10px] sm:text-[10.5px] font-medium text-amber-200/90 inline-flex items-center gap-1.5 bg-amber-950/30 border border-amber-500/30 px-2.5 py-1 rounded-lg">
                               <span>☕</span>
                               <span>Preparo artesanal no bistrô (sem estoque)</span>
                             </span>
-                          </div>
-                        ) : (
-                          <>
-                            {prod.estoque === 1 && (
-                              <div className="pt-2">
-                                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
-                                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
-                                  <span>Última peça em estoque</span>
-                                </span>
-                              </div>
-                            )}
-                            {prod.estoque === 0 && (
-                              <div className="pt-2">
-                                <span className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 px-2.5 py-1 rounded-lg">
-                                  <span>✕</span>
-                                  <span>Peça esgotada no ateliê</span>
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        )}
+                          ) : prod.estoque === 1 ? (
+                            <span className="text-[10px] sm:text-[10.5px] font-bold text-amber-300 inline-flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
+                              <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                              <span>Última peça em estoque</span>
+                            </span>
+                          ) : prod.estoque === 0 ? (
+                            <span className="text-[10px] sm:text-[10.5px] font-bold text-rose-300 inline-flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 px-2.5 py-1 rounded-lg">
+                              <span>✕</span>
+                              <span>Peça esgotada no ateliê</span>
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="p-5 pt-0 border-t border-ouro/15 flex items-center justify-between mt-3">
-                      <div>
-                        <span className="block text-[10px] text-ouro/70 uppercase tracking-widest font-semibold">Valor</span>
-                        <span className="font-serif text-lg font-bold text-ouro-light">{formatBRL(prod.preco)}</span>
+                    {/* Rodapé do Card: Preço + Botão de Compra Sem Quebras Estranhas */}
+                    <div className="p-4 sm:p-5 pt-0 border-t border-ouro/15 flex flex-col gap-2.5 mt-auto">
+                      <div className="flex items-center justify-between gap-2 pt-3">
+                        <div className="min-w-0">
+                          <span className="block text-[9.5px] sm:text-[10px] text-ouro/70 uppercase tracking-widest font-semibold leading-tight">Valor</span>
+                          <span className="font-serif text-base sm:text-lg font-bold text-ouro-light truncate block">{formatBRL(prod.preco)}</span>
+                        </div>
+
+                        <div className="shrink-0">
+                          {prod.categoria === 'Cafeteria' ? (
+                            <button
+                              type="button"
+                              onClick={() => tentarAdicionarAoCarrinho(prod)}
+                              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 whitespace-nowrap"
+                            >
+                              {!usuario && (
+                                <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                </svg>
+                              )}
+                              <span>☕ Pedir no Bistrô</span>
+                            </button>
+                          ) : prod.estoque === 0 ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-500 font-bold text-xs cursor-not-allowed opacity-60 flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <span>✕ Esgotado</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => tentarAdicionarAoCarrinho(prod)}
+                              className={"px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap " + (
+                                prod.estoque === 1
+                                  ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-celestial-950 font-bold shadow-amber-500/25'
+                                  : 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950'
+                              )}
+                            >
+                              {!usuario && (
+                                <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                </svg>
+                              )}
+                              <span>{prod.estoque === 1 ? '⚡ Última Peça' : 'Comprar'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* Botões Exclusivos para Administrador (Estoque, Editar e Excluir) */}
-                        {usuario?.role === 'admin' && (
-                          <div className="flex items-center gap-1.5">
+                      {/* Barra de Ferramentas de Gestão Exclusiva para Admin (Não concorre com o botão de compra) */}
+                      {usuario?.role === 'admin' && (
+                        <div className="pt-2 border-t border-ouro/10 flex items-center justify-between gap-1 text-[11px]">
+                          <span className="text-[10px] text-ouro/60 uppercase font-mono tracking-wider font-semibold">
+                            ⚙️ Gestão:
+                          </span>
+                          <div className="flex items-center gap-1">
                             {prod.categoria !== 'Cafeteria' && (
                               <button
                                 type="button"
@@ -2712,8 +2741,8 @@ function getFrontendHtml() {
                                   e.stopPropagation();
                                   abrirModalEstoque(prod);
                                 }}
-                                className="px-2.5 py-2 rounded-xl bg-celestial-900 hover:bg-ouro/25 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
-                                title="Gerenciar estoque desta peça"
+                                className="px-2 py-1 rounded-lg bg-celestial-950 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold transition-all cursor-pointer flex items-center gap-1 text-[10.5px]"
+                                title="Ajustar estoque da peça"
                               >
                                 <span>📦</span>
                                 <span>{prod.estoque !== undefined ? prod.estoque : 10}</span>
@@ -2725,12 +2754,13 @@ function getFrontendHtml() {
                                 e.stopPropagation();
                                 iniciarEdicaoProduto(prod);
                               }}
-                              className="p-2 rounded-xl bg-celestial-900 hover:bg-ouro/20 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm"
+                              className="px-2.5 py-1 rounded-lg bg-celestial-950 hover:bg-ouro/20 border border-ouro/30 text-ouro hover:text-ouro-light font-semibold transition-all cursor-pointer flex items-center gap-1 text-[10.5px]"
                               title="Editar peça do catálogo"
                             >
-                              <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
+                              <svg className="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                               </svg>
+                              <span>Editar</span>
                             </button>
                             <button
                               type="button"
@@ -2740,57 +2770,16 @@ function getFrontendHtml() {
                                   excluirProduto(prod.id_produto);
                                 }
                               }}
-                              className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 transition-all cursor-pointer shadow-sm"
+                              className="p-1 px-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 transition-all cursor-pointer text-[10.5px]"
                               title="Excluir peça do catálogo"
                             >
-                              <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
+                              <svg className="w-3.5 h-3.5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                               </svg>
                             </button>
                           </div>
-                        )}
-
-                        {/* Botão Comprar com Proteção de Estoque e Permissionamento */}
-                        {prod.categoria === 'Cafeteria' ? (
-                          <button
-                            type="button"
-                            onClick={() => tentarAdicionarAoCarrinho(prod)}
-                            className="px-4 py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950"
-                          >
-                            {!usuario && (
-                              <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                              </svg>
-                            )}
-                            <span>☕ Pedir no Bistrô</span>
-                          </button>
-                        ) : prod.estoque === 0 ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="px-4 py-2.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-500 font-bold text-xs cursor-not-allowed opacity-60 flex items-center gap-1.5"
-                          >
-                            <span>Esgotado</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => tentarAdicionarAoCarrinho(prod)}
-                            className={"px-4 py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer " + (
-                              prod.estoque === 1
-                                ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-celestial-950 font-bold shadow-amber-500/25'
-                                : 'bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950'
-                            )}
-                          >
-                            {!usuario && (
-                              <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                              </svg>
-                            )}
-                            <span>{prod.estoque === 1 ? 'Comprar Última Peça' : 'Comprar'}</span>
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

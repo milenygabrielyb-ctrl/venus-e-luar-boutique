@@ -1124,6 +1124,23 @@ function getFrontendHtml() {
       const [cupomPdvModal, setCupomPdvModal] = useState(null);
       const [finalizandoPdv, setFinalizandoPdv] = useState(false);
 
+      // Estados para o Modal de Permissionamento & Gestão de Equipe (Mileny, Administradora, Vendedores, Caixas)
+      const [isModalPermissionamentoOpen, setIsModalPermissionamentoOpen] = useState(false);
+      const [colaboradoresEquipe, setColaboradoresEquipe] = useState([]);
+      const [carregandoEquipe, setCarregandoEquipe] = useState(false);
+      const [mostrarFormNovoColaborador, setMostrarFormNovoColaborador] = useState(false);
+      const [novoColabNome, setNovoColabNome] = useState('');
+      const [novoColabCargo, setNovoColabCargo] = useState('Vendedor');
+      const [novoColabEmail, setNovoColabEmail] = useState('');
+      const [novoColabSenha, setNovoColabSenha] = useState('');
+      const [novoColabPermissoes, setNovoColabPermissoes] = useState({
+        pdv: true,
+        estoque: false,
+        produtos: false,
+        faturamento: false,
+        adocao: false
+      });
+
       // Estados para Gestão de Pets e Faturamento no Admin
       const [listaCandidaturas, setListaCandidaturas] = useState([]);
       const [relatorioFaturamento, setRelatorioFaturamento] = useState(null);
@@ -1992,6 +2009,7 @@ function getFrontendHtml() {
       useEffect(() => {
         carregarDados();
         carregarComandasPdv();
+        carregarColaboradoresEquipe();
         if (usuario && usuario.role === 'admin' && token) {
           carregarUsuarios(token);
         }
@@ -2248,6 +2266,114 @@ function getFrontendHtml() {
         }
       };
 
+      // ================================================================
+      // MÓDULO DE PERMISSIONAMENTO & GESTÃO DE EQUIPE
+      // ================================================================
+      const carregarColaboradoresEquipe = async () => {
+        try {
+          setCarregandoEquipe(true);
+          const res = await fetch('/api/equipe/colaboradores');
+          if (res.ok) {
+            const data = await res.json();
+            setColaboradoresEquipe(data.colaboradores || []);
+          }
+        } catch (e) {
+          console.error('Erro ao carregar colaboradores:', e);
+        } finally {
+          setCarregandoEquipe(false);
+        }
+      };
+
+      const selecionarOperadorAtivo = async (id_usuario) => {
+        try {
+          const res = await fetch('/api/equipe/selecionar-operador', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_usuario })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setUsuario(data.usuario);
+            setToken(data.token);
+            localStorage.setItem('venus_usuario', JSON.stringify(data.usuario));
+            localStorage.setItem('venus_token', data.token);
+            setIsModalPermissionamentoOpen(false);
+            setIsPermissionamentoGestaoOpen(false);
+            mostrarNotificacao('Operadora ativa: ' + (data.usuario.nome_completo || data.usuario.nome) + '!');
+          } else {
+            alert(data.erro || 'Falha ao selecionar operadora.');
+          }
+        } catch (e) {
+          alert('Erro de conexão ao alterar operador.');
+        }
+      };
+
+      const salvarNovoColaborador = async (e) => {
+        e.preventDefault();
+        if (!novoColabNome || !novoColabEmail || !novoColabSenha) {
+          alert('Preencha os campos obrigatórios (Nome, E-mail e Senha).');
+          return;
+        }
+        if (novoColabSenha.length < 6) {
+          alert('A senha deve conter no mínimo 6 caracteres.');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/equipe/cadastrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: novoColabNome,
+              cargo: novoColabCargo,
+              email: novoColabEmail,
+              senha: novoColabSenha,
+              permissoes: novoColabPermissoes
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            mostrarNotificacao('Colaborador(a) ' + novoColabNome + ' cadastrado(a) com sucesso!');
+            setNovoColabNome('');
+            setNovoColabEmail('');
+            setNovoColabSenha('');
+            setMostrarFormNovoColaborador(false);
+            carregarColaboradoresEquipe();
+          } else {
+            alert(data.erro || 'Falha ao cadastrar colaborador.');
+          }
+        } catch (e) {
+          alert('Erro ao conectar com o servidor.');
+        }
+      };
+
+      const alternarPermissaoColaborador = async (id_usuario, permissaoChave) => {
+        const colab = colaboradoresEquipe.find(c => c.id_usuario === id_usuario);
+        if (!colab) return;
+        const novasPermissoes = {
+          ...(colab.permissoes || {}),
+          [permissaoChave]: !(colab.permissoes && colab.permissoes[permissaoChave])
+        };
+
+        try {
+          const res = await fetch('/api/equipe/atualizar-permissoes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_usuario,
+              permissoes: novasPermissoes,
+              cargo: colab.cargo
+            })
+          });
+          if (res.ok) {
+            setColaboradoresEquipe(colaboradoresEquipe.map(c => c.id_usuario === id_usuario ? { ...c, permissoes: novasPermissoes } : c));
+            mostrarNotificacao('Permissão atualizada!');
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
       const tentarAdicionarAoCarrinho = (produto, customAtributos) => {
         if (!produto) return false;
         const ehAlimento = produto.categoria === 'Cafeteria';
@@ -2452,25 +2578,37 @@ function getFrontendHtml() {
 
                 {/* Ações da Barra: Gestão, Conta e Sacola (Perfeito em Celular, Tablet e Notebook) */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                  {usuario?.role === 'admin' && (
-                    <button
-                      id="btn-abrir-pdv-header"
-                      onClick={() => {
-                        carregarComandasPdv();
-                        setIsPdvOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-400/60 bg-amber-950/80 text-amber-300 hover:bg-amber-500 hover:text-celestial-950 text-[10.5px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-md group whitespace-nowrap"
-                      title="Abrir Ponto de Venda / Frente de Caixa (PDV)"
-                    >
-                      <span>🖥️</span>
-                      <span className="hidden sm:inline">PDV Caixa</span>
-                      {pdvComandas.length > 0 && (
-                        <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white font-extrabold text-[9px] rounded-full animate-pulse shadow-sm">
-                          {pdvComandas.length}
-                        </span>
-                      )}
-                    </button>
-                  )}
+                  <button
+                    id="btn-abrir-pdv-header"
+                    onClick={() => {
+                      carregarComandasPdv();
+                      setIsPdvOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-400/60 bg-amber-950/80 text-amber-300 hover:bg-amber-500 hover:text-celestial-950 text-[10.5px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-md group whitespace-nowrap"
+                    title="Abrir Ponto de Venda / Frente de Caixa (PDV)"
+                  >
+                    <span>🖥️</span>
+                    <span className="hidden sm:inline">PDV Caixa</span>
+                    {pdvComandas.length > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white font-extrabold text-[9px] rounded-full animate-pulse shadow-sm">
+                        {pdvComandas.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    id="btn-abrir-permissionamento-header"
+                    type="button"
+                    onClick={() => {
+                      carregarColaboradoresEquipe();
+                      setIsModalPermissionamentoOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-purple-400/50 bg-purple-950/80 text-purple-200 hover:bg-purple-500 hover:text-celestial-950 text-[10.5px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-sm group whitespace-nowrap"
+                    title="Modal de Permissionamento e Gestão de Equipe (Mileny, Administradora, Vendedores, Caixas)"
+                  >
+                    <span>🔐</span>
+                    <span className="hidden sm:inline">Permissões</span>
+                  </button>
 
                   {usuario?.role === 'admin' && (
                     <button
@@ -3156,29 +3294,37 @@ function getFrontendHtml() {
                   </button>
                 </form>
 
-                {/* RECURSO OCULTO SOB DEMANDA: O botão de autorização VIP imediata existe no código, mas fica oculto até solicitação futura */}
-                {false && (
-                  <div className="pt-2 border-t border-ouro/20">
+                {/* Acesso Rápido de 1 Clique para a Equipe Atual (Mileny & Administradora) */}
+                <div className="pt-3 border-t border-ouro/25 space-y-2">
+                  <div className="text-center">
+                    <span className="text-[11px] font-bold text-ouro uppercase tracking-wider block">
+                      ⚡ Seleção Rápida de Operadora (1 Clique)
+                    </span>
+                    <p className="text-[10px] text-luar-300/80">
+                      Como a equipe no momento é formada por vocês duas, clique abaixo para assumir imediatamente:
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={async () => {
-                        const res = await fetch('/api/auth/login', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ email: 'admin@butique.com', senha: 'admin123' })
-                        });
-                        const json = await res.json();
-                        if (res.ok) {
-                          handleLoginAdminSucesso(json.usuario, json.token);
-                        }
-                      }}
-                      className="w-full py-3 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/10 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                      id="btn-login-rapido-mileny"
+                      onClick={() => selecionarOperadorAtivo('usr_mileny_admin')}
+                      className="py-2.5 px-3 rounded-xl bg-celestial-950 border border-ouro/50 hover:border-ouro hover:bg-ouro/15 text-ouro text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      <svg className="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.8" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
-                      <span>Autorizar Imediatamente como Administradora VIP</span>
+                      <span>👑</span>
+                      <span>Mileny Gabriely</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-login-rapido-admin"
+                      onClick={() => selecionarOperadorAtivo('usr_admin_01')}
+                      className="py-2.5 px-3 rounded-xl bg-celestial-950 border border-ouro/50 hover:border-ouro hover:bg-ouro/15 text-ouro text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <span>👑</span>
+                      <span>Administradora Vênus</span>
                     </button>
                   </div>
-                )}
+                </div>
 
               </div>
             </div>
@@ -6356,9 +6502,24 @@ function getFrontendHtml() {
                         🟢 Caixa Aberto
                       </span>
                     </div>
-                    <p className="text-[11px] text-ouro/70">
-                      Operador: <strong className="text-ouro">{usuario?.nome || 'Operador Autorizado'}</strong> | Terminal: #PDV-01
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      <p className="text-[11px] text-ouro/70">
+                        Operador: <strong className="text-ouro">{usuario?.nome_completo || usuario?.nome || 'Mileny Gabriely'}</strong> ({usuario?.cargo || (usuario?.role === 'admin' ? 'Administradora' : 'Operadora')}) | Terminal: #PDV-01
+                      </p>
+                      <button
+                        type="button"
+                        id="btn-trocar-operador-pdv"
+                        onClick={() => {
+                          carregarColaboradoresEquipe();
+                          setIsModalPermissionamentoOpen(true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-celestial-950 border border-purple-400/50 text-purple-200 hover:bg-purple-500 hover:text-celestial-950 text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                        title="Alternar Operador ou Gerenciar Permissões da Equipe"
+                      >
+                        <span>👥</span>
+                        <span>Trocar Operador / Permissões</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -6975,6 +7136,292 @@ function getFrontendHtml() {
                     className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all cursor-pointer shadow-md"
                   >
                     ✨ Nova Venda
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DE PERMISSIONAMENTO & GESTÃO DE EQUIPE (MILENY, ADM, VENDEDORES) */}
+          {/* ==================================================================== */}
+          {isModalPermissionamentoOpen && (
+            <div id="modal-permissionamento-equipe" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-2xl bg-celestial-900 border-2 border-ouro/60 rounded-3xl p-5 sm:p-7 shadow-2xl max-h-[92vh] overflow-y-auto space-y-4">
+                
+                {/* Fechar */}
+                <button
+                  type="button"
+                  id="btn-fechar-modal-permissionamento"
+                  onClick={() => setIsModalPermissionamentoOpen(false)}
+                  className="absolute top-4 right-4 text-ouro hover:text-white text-2xl font-bold cursor-pointer"
+                >
+                  ×
+                </button>
+
+                {/* Cabeçalho */}
+                <div className="text-center space-y-1.5 pb-3 border-b border-ouro/25">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-celestial-950 border border-ouro/60 p-1 flex items-center justify-center shadow-md">
+                    <span className="text-2xl">🔐</span>
+                  </div>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold gold-gradient-text tracking-wide">
+                    Modal de Permissionamento &amp; Equipe
+                  </h3>
+                  <p className="text-xs text-luar-300">
+                    Controle de Acessos para Administradoras, Vendedores, Caixas e Baristas da Boutique
+                  </p>
+                  
+                  {/* Banner Explicativo amigável para a realidade atual de 2 pessoas */}
+                  <div className="p-3 rounded-2xl bg-purple-950/40 border border-purple-500/40 text-purple-200 text-xs text-left leading-relaxed mt-2 flex items-start gap-2">
+                    <span className="text-base shrink-0">💡</span>
+                    <div>
+                      <strong className="text-purple-300 font-bold block">Operação Atual da Boutique:</strong>
+                      Atualmente gerenciado por você e mais uma parceira. Selecione a operadora ativa abaixo com <strong>1 clique</strong> para assumir o caixa e a gestão, ou cadastre novos colaboradores conforme a equipe expandir.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de Colaboradores e Seleção Rápida */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-ouro uppercase tracking-wider flex items-center gap-1.5">
+                      <span>👥</span>
+                      <span>Colaboradores Cadastrados ({colaboradoresEquipe.length})</span>
+                    </h4>
+                    <button
+                      type="button"
+                      id="btn-toggle-novo-colaborador"
+                      onClick={() => setMostrarFormNovoColaborador(!mostrarFormNovoColaborador)}
+                      className="px-3 py-1 rounded-xl bg-gradient-to-r from-ouro to-amber-500 hover:from-amber-400 hover:to-ouro text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                    >
+                      <span>{mostrarFormNovoColaborador ? '✕ Fechar Formulário' : '✦ Cadastrar Novo Colaborador'}</span>
+                    </button>
+                  </div>
+
+                  {/* Formulário de Cadastro de Novo Colaborador (Funcionários, Vendedores, Caixas, Baristas) */}
+                  {mostrarFormNovoColaborador && (
+                    <form onSubmit={salvarNovoColaborador} className="p-4 rounded-2xl bg-celestial-950 border-2 border-ouro/50 space-y-3 animate-fadeIn">
+                      <div className="flex items-center justify-between pb-2 border-b border-ouro/20">
+                        <span className="text-xs font-bold text-ouro uppercase tracking-wider flex items-center gap-1.5">
+                          <span>➕</span> Novo Membro da Equipe
+                        </span>
+                        <span className="text-[10px] text-ouro/70">Acesso personalizado</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-ouro/80 block mb-1">Nome Completo</label>
+                          <input
+                            type="text"
+                            required
+                            id="novo-colab-nome"
+                            value={novoColabNome}
+                            onChange={e => setNovoColabNome(e.target.value)}
+                            placeholder="Ex: Beatriz Lima"
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-ouro/80 block mb-1">Cargo / Função</label>
+                          <select
+                            id="novo-colab-cargo"
+                            value={novoColabCargo}
+                            onChange={e => {
+                              const c = e.target.value;
+                              setNovoColabCargo(c);
+                              if (c === 'Administrador') {
+                                setNovoColabPermissoes({ pdv: true, estoque: true, produtos: true, faturamento: true, adocao: true });
+                              } else if (c === 'Gerente') {
+                                setNovoColabPermissoes({ pdv: true, estoque: true, produtos: true, faturamento: false, adocao: true });
+                              } else if (c === 'Vendedor') {
+                                setNovoColabPermissoes({ pdv: true, estoque: false, produtos: false, faturamento: false, adocao: false });
+                              } else if (c === 'Operador de Caixa') {
+                                setNovoColabPermissoes({ pdv: true, estoque: false, produtos: false, faturamento: false, adocao: false });
+                              } else if (c === 'Barista') {
+                                setNovoColabPermissoes({ pdv: false, estoque: false, produtos: false, faturamento: false, adocao: false });
+                              }
+                            }}
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 focus:outline-none focus:border-ouro cursor-pointer"
+                          >
+                            <option value="Administrador">👑 Administrador (Acesso Pleno)</option>
+                            <option value="Gerente">💼 Gerente (PDV, Estoque e Produtos)</option>
+                            <option value="Vendedor">🛍️ Vendedor (PDV Balcão e Catálogo)</option>
+                            <option value="Operador de Caixa">🖥️ Operador de Caixa (PDV e Cupons)</option>
+                            <option value="Barista">☕ Barista (Comandas e Bistrô)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-ouro/80 block mb-1">E-mail Profissional</label>
+                          <input
+                            type="email"
+                            required
+                            id="novo-colab-email"
+                            value={novoColabEmail}
+                            onChange={e => setNovoColabEmail(e.target.value)}
+                            placeholder="colaborador@butique.com"
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-ouro/80 block mb-1">Senha (Mín. 6 caracteres)</label>
+                          <input
+                            type="password"
+                            required
+                            id="novo-colab-senha"
+                            value={novoColabSenha}
+                            onChange={e => setNovoColabSenha(e.target.value)}
+                            placeholder="••••••••••••"
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Permissões Específicas */}
+                      <div className="pt-2 border-t border-ouro/15 text-left">
+                        <label className="text-[10px] uppercase font-bold text-ouro/80 block mb-1.5">Permissões de Acesso Concedidas:</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { key: 'pdv', label: '🖥️ Frente de Caixa (PDV)' },
+                            { key: 'estoque', label: '📦 Ajuste de Estoque' },
+                            { key: 'produtos', label: '👗 Cadastro de Roupas' },
+                            { key: 'faturamento', label: '📊 Faturamento Financeiro' },
+                            { key: 'adocao', label: '🐾 Adoção de Pets' }
+                          ].map(p => (
+                            <label key={p.key} className="flex items-center gap-1.5 p-2 rounded-xl bg-celestial-900 border border-ouro/20 text-xs text-luar-200 cursor-pointer hover:border-ouro">
+                              <input
+                                type="checkbox"
+                                checked={!!novoColabPermissoes[p.key]}
+                                onChange={e => setNovoColabPermissoes({ ...novoColabPermissoes, [p.key]: e.target.checked })}
+                                className="accent-amber-500 rounded"
+                              />
+                              <span className="text-[11px]">{p.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setMostrarFormNovoColaborador(false)}
+                          className="px-3 py-2 rounded-xl bg-stone-800 text-stone-300 hover:text-white text-xs font-bold uppercase transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          id="btn-salvar-novo-colaborador"
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-ouro to-amber-500 text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 transition-all cursor-pointer shadow-md"
+                        >
+                          ✦ Cadastrar Colaborador
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Cards de Colaboradores Cadastrados */}
+                  <div className="space-y-2.5 max-h-[46vh] overflow-y-auto pr-1">
+                    {colaboradoresEquipe.length === 0 ? (
+                      <div className="text-center p-6 text-xs text-luar-300">
+                        Carregando colaboradores...
+                      </div>
+                    ) : (
+                      colaboradoresEquipe.map(colab => {
+                        const ehAtivo = usuario && (usuario.id_usuario === colab.id_usuario || usuario.email === colab.email);
+
+                        return (
+                          <div
+                            key={colab.id_usuario}
+                            id={'card-colaborador-' + colab.id_usuario}
+                            className={"p-3.5 rounded-2xl border transition-all text-left flex flex-col sm:flex-row sm:items-center justify-between gap-3 " + (ehAtivo ? 'bg-amber-950/40 border-amber-400/80 shadow-md ring-1 ring-amber-400/40' : 'bg-celestial-950/80 border-ouro/25 hover:border-ouro/60')}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-celestial-900 via-stone-800 to-ouro/30 border border-ouro/40 flex items-center justify-center font-serif text-sm font-bold text-ouro shrink-0 shadow-sm">
+                                {(colab.nome_completo || colab.email || 'C').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-xs font-bold text-ouro-light">
+                                    {colab.nome_completo}
+                                  </span>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-ouro/20 text-ouro border border-ouro/30">
+                                    {colab.cargo || (colab.role === 'admin' ? 'Administradora' : 'Colaborador')}
+                                  </span>
+                                  {ehAtivo && (
+                                    <span className="text-[9.5px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                                      🟢 Operando Agora
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-luar-300/70 mt-0.5">
+                                  {colab.email}
+                                </p>
+
+                                {/* Badges de Permissão */}
+                                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                  {[
+                                    { key: 'pdv', label: 'PDV', icon: '🖥️' },
+                                    { key: 'estoque', label: 'Estoque', icon: '📦' },
+                                    { key: 'produtos', label: 'Catálogo', icon: '👗' },
+                                    { key: 'faturamento', label: 'Financeiro', icon: '📊' },
+                                    { key: 'adocao', label: 'Pets', icon: '🐾' }
+                                  ].map(p => {
+                                    const tem = colab.permissoes && colab.permissoes[p.key];
+                                    return (
+                                      <button
+                                        key={p.key}
+                                        type="button"
+                                        onClick={() => alternarPermissaoColaborador(colab.id_usuario, p.key)}
+                                        title={'Clique para alternar permissão de ' + p.label}
+                                        className={"text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition-all cursor-pointer flex items-center gap-0.5 " + (tem ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-stone-900/60 border-stone-700 text-stone-500 line-through opacity-60')}
+                                      >
+                                        <span>{p.icon}</span>
+                                        <span>{p.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Botão de Ação / 1-Clique para assumir o caixa */}
+                            <div className="flex sm:flex-col items-center sm:items-end gap-1.5 shrink-0">
+                              {!ehAtivo ? (
+                                <button
+                                  type="button"
+                                  id={'btn-selecionar-operador-' + colab.id_usuario}
+                                  onClick={() => selecionarOperadorAtivo(colab.id_usuario)}
+                                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-ouro hover:from-ouro hover:to-amber-500 text-celestial-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                                >
+                                  <span>⚡</span>
+                                  <span>Assumir Operação</span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                                  <span>✓</span>
+                                  <span>Conectada</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Rodapé do Modal */}
+                <div className="pt-2 border-t border-ouro/20 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalPermissionamentoOpen(false)}
+                    className="py-2.5 px-5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/10 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                  >
+                    Fechar Modal
                   </button>
                 </div>
 
@@ -11790,6 +12237,195 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
       ticket_medio: Number(ticketMedio.toFixed(2)),
       pedidos: pedidos
     }));
+    return;
+  }
+
+  // ================================================================
+  // MÓDULO DE PERMISSIONAMENTO & GESTÃO DE EQUIPE (COLABORADORES)
+  // ================================================================
+
+  // GET /api/equipe/colaboradores
+  if (pathname === '/api/equipe/colaboradores' && req.method === 'GET') {
+    const lista = usuarios
+      .filter(u => u.role === 'admin' || u.cargo || ['gerente', 'vendedor', 'caixa', 'barista', 'colaborador'].includes(u.role))
+      .map(u => ({
+        id_usuario: u.id_usuario,
+        nome_completo: u.nome_completo || u.nome || 'Colaborador',
+        email: u.email,
+        role: u.role,
+        cargo: u.cargo || (u.id_usuario === 'usr_mileny_admin' ? 'Administradora & Proprietária' : (u.role === 'admin' ? 'Administradora Geral' : 'Colaborador')),
+        permissoes: u.permissoes || {
+          pdv: true,
+          estoque: u.role === 'admin',
+          produtos: u.role === 'admin',
+          faturamento: u.role === 'admin',
+          adocao: u.role === 'admin'
+        },
+        foto_perfil: u.foto_perfil || null,
+        ultimo_acesso: u.ultimo_acesso
+      }));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ colaboradores: lista }));
+    return;
+  }
+
+  // POST /api/equipe/selecionar-operador (LOGIN RÁPIDO DE 1 CLIQUE PARA A EQUIPE)
+  if (pathname === '/api/equipe/selecionar-operador' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id_usuario } = JSON.parse(body);
+        const user = usuarios.find(u => u.id_usuario === id_usuario);
+        if (!user) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Colaborador não encontrado.' }));
+          return;
+        }
+
+        user.ultimo_acesso = new Date().toISOString();
+        salvarUsuariosNoDisco();
+
+        const token = gerarJwt({
+          id_usuario: user.id_usuario,
+          email: user.email,
+          role: user.role,
+          nome: user.nome_completo || user.nome,
+          cargo: user.cargo || (user.role === 'admin' ? 'Administradora' : user.role)
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          token,
+          usuario: {
+            id_usuario: user.id_usuario,
+            nome: user.nome_completo || user.nome,
+            nome_completo: user.nome_completo || user.nome,
+            email: user.email,
+            role: user.role,
+            cargo: user.cargo || (user.id_usuario === 'usr_mileny_admin' ? 'Administradora & Proprietária' : (user.role === 'admin' ? 'Administradora Geral' : 'Colaborador')),
+            permissoes: user.permissoes || {
+              pdv: true,
+              estoque: user.role === 'admin',
+              produtos: user.role === 'admin',
+              faturamento: user.role === 'admin',
+              adocao: user.role === 'admin'
+            },
+            foto_perfil: user.foto_perfil || null
+          }
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao selecionar operador.' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/equipe/cadastrar (CADASTRO DE FUNCIONÁRIOS, ADM, VENDEDORES, CAIXAS E BARISTAS)
+  if (pathname === '/api/equipe/cadastrar' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { nome, email, senha, cargo, permissoes } = JSON.parse(body);
+        if (!nome || !email || !senha) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Preencha todos os campos obrigatórios (Nome, E-mail e Senha).' }));
+          return;
+        }
+
+        const emailNorm = email.trim().toLowerCase();
+        if (usuarios.some(u => u.email.toLowerCase() === emailNorm)) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Já existe um colaborador cadastrado com este e-mail.' }));
+          return;
+        }
+
+        if (senha.length < 6) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'A senha do colaborador deve possuir no mínimo 6 caracteres.' }));
+          return;
+        }
+
+        const cargoEscolhido = cargo || 'Vendedor';
+        const ehAdmin = cargoEscolhido === 'Administrador' || cargoEscolhido.toLowerCase().includes('admin');
+        const role = ehAdmin ? 'admin' : 'colaborador';
+
+        const novoColab = {
+          id_usuario: 'usr_staff_' + Date.now(),
+          nome_completo: nome.trim(),
+          email: emailNorm,
+          cargo: cargoEscolhido,
+          role: role,
+          permissoes: permissoes || {
+            pdv: true,
+            estoque: ehAdmin || cargoEscolhido === 'Gerente',
+            produtos: ehAdmin || cargoEscolhido === 'Gerente',
+            faturamento: ehAdmin,
+            adocao: ehAdmin
+          },
+          senha_hash: gerarHashScrypt(senha),
+          criado_em: new Date().toISOString(),
+          ultimo_acesso: null
+        };
+
+        usuarios.push(novoColab);
+        salvarUsuariosNoDisco();
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          mensagem: 'Colaborador(a) ' + novoColab.nome_completo + ' registrado(a) com sucesso!',
+          colaborador: {
+            id_usuario: novoColab.id_usuario,
+            nome_completo: novoColab.nome_completo,
+            email: novoColab.email,
+            cargo: novoColab.cargo,
+            role: novoColab.role,
+            permissoes: novoColab.permissoes
+          }
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao cadastrar colaborador.' }));
+      }
+    });
+    return;
+  }
+
+  // PUT /api/equipe/atualizar-permissoes
+  if (pathname === '/api/equipe/atualizar-permissoes' && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id_usuario, permissoes, cargo } = JSON.parse(body);
+        const user = usuarios.find(u => u.id_usuario === id_usuario);
+        if (!user) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Colaborador não encontrado.' }));
+          return;
+        }
+
+        if (permissoes) user.permissoes = permissoes;
+        if (cargo) {
+          user.cargo = cargo;
+          if (cargo === 'Administrador' || cargo.toLowerCase().includes('admin')) {
+            user.role = 'admin';
+          }
+        }
+        salvarUsuariosNoDisco();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, mensagem: 'Permissões atualizadas com sucesso!', usuario: user }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao atualizar permissões.' }));
+      }
+    });
     return;
   }
 

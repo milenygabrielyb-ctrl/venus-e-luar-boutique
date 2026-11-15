@@ -1185,12 +1185,40 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Logo da Boutique
+  // Logo Oficial da Boutique Vênus e Luar
   if (pathname === '/logo.jpg') {
-    const logoPath = path.join(__dirname, '..', 'public', 'logo.jpg');
+    const logoPath = path.join(__dirname, '..', 'logo.jpg');
     if (fs.existsSync(logoPath)) {
-      res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
       res.end(fs.readFileSync(logoPath));
+      return;
+    } else {
+      const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+        <defs>
+          <radialGradient id="skyGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#141c2e"/>
+            <stop offset="100%" stop-color="#070b14"/>
+          </radialGradient>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fdf4dc"/>
+            <stop offset="50%" stop-color="#d4af37"/>
+            <stop offset="100%" stop-color="#aa820a"/>
+          </linearGradient>
+        </defs>
+        <rect width="600" height="600" fill="url(#skyGrad)"/>
+        <circle cx="300" cy="300" r="255" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-opacity="0.4"/>
+        <circle cx="300" cy="300" r="240" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="4 6"/>
+        <path d="M300 130 C 410 130, 480 210, 480 300 C 480 390, 410 470, 300 470 C 375 410, 375 190, 300 130 Z" fill="url(#goldGrad)" opacity="0.95"/>
+        <polygon points="300,195 315,255 375,270 315,285 300,345 285,285 225,270 285,255" fill="#fef3c7"/>
+        <circle cx="210" cy="180" r="3" fill="#fef3c7"/>
+        <circle cx="410" cy="190" r="3" fill="#fef3c7"/>
+        <circle cx="390" cy="420" r="3.5" fill="#fef3c7"/>
+        <circle cx="210" cy="410" r="2.5" fill="#fef3c7"/>
+        <text x="300" y="445" font-family="'Playfair Display', Georgia, serif" font-size="30" fill="url(#goldGrad)" font-weight="bold" text-anchor="middle" letter-spacing="4">VÊNUS E LUAR</text>
+        <text x="300" y="475" font-family="'Cinzel', 'Trajan Pro', sans-serif" font-size="14" fill="#fef3c7" font-weight="600" letter-spacing="10" text-anchor="middle">BOUTIQUE</text>
+      </svg>`;
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=3600' });
+      res.end(fallbackSvg);
       return;
     }
   }

@@ -1108,6 +1108,22 @@ function getFrontendHtml() {
       const [enviandoPedidoBistro, setEnviandoPedidoBistro] = useState(false);
       const [comandaBistroModal, setComandaBistroModal] = useState(null); // comanda emitida para conferência e pagamento no caixa
 
+      // Estados para PDV (Ponto de Venda / Frente de Caixa da Boutique)
+      const [isPdvOpen, setIsPdvOpen] = useState(window.location.pathname === '/pdv');
+      const [pdvComandas, setPdvComandas] = useState([]);
+      const [pdvComandaSelecionada, setPdvComandaSelecionada] = useState(null);
+      const [pdvItens, setPdvItens] = useState([]);
+      const [pdvClienteNome, setPdvClienteNome] = useState('');
+      const [pdvClienteCpf, setPdvClienteCpf] = useState('');
+      const [pdvLocal, setPdvLocal] = useState('');
+      const [pdvDesconto, setPdvDesconto] = useState(0);
+      const [pdvFormaPagamento, setPdvFormaPagamento] = useState('Dinheiro'); // 'Dinheiro' | 'Cartao_Credito' | 'Cartao_Debito' | 'PIX'
+      const [pdvValorRecebido, setPdvValorRecebido] = useState('');
+      const [pdvBuscaProduto, setPdvBuscaProduto] = useState('');
+      const [pdvAbaCategoria, setPdvAbaCategoria] = useState('Todos'); // 'Todos' | 'Cafeteria' | 'Moda' | 'Pet'
+      const [cupomPdvModal, setCupomPdvModal] = useState(null);
+      const [finalizandoPdv, setFinalizandoPdv] = useState(false);
+
       // Estados para Gestão de Pets e Faturamento no Admin
       const [listaCandidaturas, setListaCandidaturas] = useState([]);
       const [relatorioFaturamento, setRelatorioFaturamento] = useState(null);
@@ -1975,9 +1991,14 @@ function getFrontendHtml() {
 
       useEffect(() => {
         carregarDados();
+        carregarComandasPdv();
         if (usuario && usuario.role === 'admin' && token) {
           carregarUsuarios(token);
         }
+        const intervalPdv = setInterval(() => {
+          carregarComandasPdv();
+        }, 5000);
+        return () => clearInterval(intervalPdv);
       }, []);
 
       const mostrarNotificacao = (texto, tipo = 'sucesso') => {
@@ -2101,6 +2122,129 @@ function getFrontendHtml() {
           alert('Erro de conexão ao enviar pedido ao bistrô.');
         } finally {
           setEnviandoPedidoBistro(false);
+        }
+      };
+
+      // ================================================================
+      // MÓDULO PDV: FRENTE DE CAIXA, COMANDAS BISTRÔ & VENDA DIRETA BALCÃO
+      // ================================================================
+      const carregarComandasPdv = async () => {
+        try {
+          const res = await fetch('/api/pdv/comandas-abertas');
+          if (res.ok) {
+            const data = await res.json();
+            setPdvComandas(data);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const puxarComandaParaCaixa = (comanda) => {
+        setPdvComandaSelecionada(comanda);
+        setPdvItens([...comanda.itens]);
+        setPdvClienteNome(comanda.nome_cliente || '');
+        setPdvClienteCpf(comanda.cpf_cliente !== 'Pagamento no Caixa' ? comanda.cpf_cliente : '');
+        setPdvLocal(comanda.local_consumo || '');
+        setPdvDesconto(0);
+        setPdvValorRecebido('');
+        mostrarNotificacao('Comanda #' + (comanda.numero_comanda || comanda.id_pedido) + ' carregada no caixa!');
+      };
+
+      const pdvAdicionarItem = (prod) => {
+        const existe = pdvItens.find(it => it.id_produto === prod.id_produto);
+        if (existe) {
+          setPdvItens(pdvItens.map(it => it.id_produto === prod.id_produto ? { ...it, quantidade: it.quantidade + 1 } : it));
+        } else {
+          setPdvItens([...pdvItens, {
+            id_produto: prod.id_produto,
+            nome_item: prod.nome_item,
+            preco: Number(prod.preco),
+            quantidade: 1,
+            categoria: prod.categoria,
+            imagem_url: prod.imagem_url
+          }]);
+        }
+      };
+
+      const pdvRemoverItem = (idProd) => {
+        setPdvItens(pdvItens.filter(it => it.id_produto !== idProd));
+      };
+
+      const pdvAlterarQtd = (idProd, delta) => {
+        setPdvItens(pdvItens.map(it => {
+          if (it.id_produto === idProd) {
+            const nova = it.quantidade + delta;
+            return nova > 0 ? { ...it, quantidade: nova } : null;
+          }
+          return it;
+        }).filter(Boolean));
+      };
+
+      const pdvLimparVenda = () => {
+        setPdvComandaSelecionada(null);
+        setPdvItens([]);
+        setPdvClienteNome('');
+        setPdvClienteCpf('');
+        setPdvLocal('');
+        setPdvDesconto(0);
+        setPdvValorRecebido('');
+      };
+
+      const pdvSubtotal = pdvItens.reduce((acc, it) => acc + (Number(it.preco) * Number(it.quantidade)), 0);
+      const pdvTotalFinal = Math.max(0, pdvSubtotal - (Number(pdvDesconto) || 0));
+      const pdvTroco = pdvFormaPagamento === 'Dinheiro' && Number(pdvValorRecebido) > pdvTotalFinal ? Number(pdvValorRecebido) - pdvTotalFinal : 0;
+
+      const pdvFinalizarVenda = async () => {
+        if (pdvItens.length === 0) {
+          alert('Adicione ao menos um item ou selecione uma comanda para finalizar a venda.');
+          return;
+        }
+
+        if (pdvFormaPagamento === 'Dinheiro') {
+          const recebido = Number(pdvValorRecebido) || 0;
+          if (recebido < pdvTotalFinal) {
+            alert('O valor em dinheiro informado (R$ ' + recebido.toFixed(2) + ') é menor que o total a pagar (R$ ' + pdvTotalFinal.toFixed(2) + ').');
+            return;
+          }
+        }
+
+        try {
+          setFinalizandoPdv(true);
+          const payload = {
+            id_pedido: pdvComandaSelecionada ? pdvComandaSelecionada.id_pedido : null,
+            itens: pdvItens,
+            desconto: Number(pdvDesconto) || 0,
+            forma_pagamento: pdvFormaPagamento === 'Dinheiro' ? 'Dinheiro Físico' : (pdvFormaPagamento === 'Cartao_Credito' ? 'Cartão de Crédito' : (pdvFormaPagamento === 'Cartao_Debito' ? 'Cartão de Débito' : 'PIX Instantâneo')),
+            valor_recebido: pdvFormaPagamento === 'Dinheiro' ? Number(pdvValorRecebido) : pdvTotalFinal,
+            troco: pdvTroco,
+            nome_cliente: pdvClienteNome.trim() || 'Consumidor Final',
+            cpf_cliente: pdvClienteCpf.trim(),
+            local_consumo: pdvLocal || (pdvComandaSelecionada ? pdvComandaSelecionada.local_consumo : 'Balcão / Loja Física'),
+            nome_operador: usuario ? (usuario.nome || usuario.email) : 'Operador Caixa'
+          };
+
+          const res = await fetch('/api/pdv/finalizar-venda', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setCupomPdvModal(data.cupom);
+            pdvLimparVenda();
+            carregarComandasPdv();
+            carregarDados();
+            carregarFaturamentoAdmin();
+            mostrarNotificacao('Venda concluída no PDV com emissão de cupom!');
+          } else {
+            alert(data.erro || 'Falha ao finalizar venda no PDV.');
+          }
+        } catch (e) {
+          alert('Erro de conexão ao processar venda no PDV.');
+        } finally {
+          setFinalizandoPdv(false);
         }
       };
 
@@ -2308,6 +2452,26 @@ function getFrontendHtml() {
 
                 {/* Ações da Barra: Gestão, Conta e Sacola (Perfeito em Celular, Tablet e Notebook) */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  {usuario?.role === 'admin' && (
+                    <button
+                      id="btn-abrir-pdv-header"
+                      onClick={() => {
+                        carregarComandasPdv();
+                        setIsPdvOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-amber-400/60 bg-amber-950/80 text-amber-300 hover:bg-amber-500 hover:text-celestial-950 text-[10.5px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-md group whitespace-nowrap"
+                      title="Abrir Ponto de Venda / Frente de Caixa (PDV)"
+                    >
+                      <span>🖥️</span>
+                      <span className="hidden sm:inline">PDV Caixa</span>
+                      {pdvComandas.length > 0 && (
+                        <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white font-extrabold text-[9px] rounded-full animate-pulse shadow-sm">
+                          {pdvComandas.length}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
                   {usuario?.role === 'admin' && (
                     <button
                       id="btn-estoque-header"
@@ -6172,6 +6336,652 @@ function getFrontendHtml() {
             </div>
           )}
 
+          {/* ==================================================================== */}
+          {/* TERMINAL PDV: PONTO DE VENDA & FRENTE DE CAIXA VÊNUS E LUAR BOUTIQUE */}
+          {/* ==================================================================== */}
+          {isPdvOpen && (
+            <div id="pdv-terminal-fullscreen" className="fixed inset-0 z-50 bg-celestial-950 text-luar-100 flex flex-col font-sans overflow-hidden animate-fadeIn">
+              {/* Barra Superior do PDV */}
+              <div className="bg-celestial-900 border-b border-ouro/40 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-lg flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full border border-ouro/60 bg-celestial-950 p-1 flex items-center justify-center shadow-md">
+                    <img src="/logo.jpg" alt="Vênus e Luar Logo" className="w-full h-full object-cover rounded-full" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-serif text-lg font-bold gold-gradient-text tracking-wide">
+                        Vênus &amp; Luar Boutique • Frente de Caixa
+                      </h2>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                        🟢 Caixa Aberto
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ouro/70">
+                      Operador: <strong className="text-ouro">{usuario?.nome || 'Operador Autorizado'}</strong> | Terminal: #PDV-01
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={carregarComandasPdv}
+                    className="px-3 py-1.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/10 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                    title="Atualizar lista de comandas do bistrô"
+                  >
+                    <span>🔄</span>
+                    <span className="hidden sm:inline">Atualizar Comandas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={pdvLimparVenda}
+                    className="px-3 py-1.5 rounded-xl bg-stone-800/80 border border-stone-600 text-stone-300 hover:text-rose-400 hover:border-rose-500/60 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                    title="Limpar itens da venda atual"
+                  >
+                    <span>🧹</span>
+                    <span className="hidden sm:inline">Limpar Caixa</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-fechar-pdv"
+                    onClick={() => {
+                      setIsPdvOpen(false);
+                      if (window.location.pathname === '/pdv') {
+                        window.history.pushState({}, '', '/');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-ouro to-amber-500 text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 transition-all cursor-pointer shadow-md flex items-center gap-1"
+                  >
+                    <span>✕</span>
+                    <span>Voltar à Boutique</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Corpo Principal do PDV: 3 Colunas */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 overflow-hidden bg-gradient-to-br from-celestial-950 via-celestial-900 to-celestial-950">
+                
+                {/* COLUNA 1: COMANDAS DO BISTRÔ (3 colunas no lg) */}
+                <div className="lg:col-span-3 bg-celestial-900/90 border border-amber-500/30 rounded-2xl p-3 flex flex-col overflow-hidden shadow-xl">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber-500/30">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">☕</span>
+                      <h3 className="font-serif text-sm font-bold text-amber-300 tracking-wide">
+                        Comandas Bistrô
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        {pdvComandas.length}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-400/70">Aguardando Caixa</span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                    {pdvComandas.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4 text-luar-300/60">
+                        <span className="text-3xl mb-2">✨</span>
+                        <p className="text-xs">Nenhuma comanda pendente no bistrô neste momento.</p>
+                        <p className="text-[10px] text-luar-400/50 mt-1">Novos pedidos feitos no bistrô aparecerão aqui automaticamente.</p>
+                      </div>
+                    ) : (
+                      pdvComandas.map(cmd => (
+                        <div
+                          key={cmd.id_pedido}
+                          className={"p-3 rounded-xl border transition-all text-left " + (pdvComandaSelecionada?.id_pedido === cmd.id_pedido ? 'bg-amber-950/60 border-amber-400 shadow-md ring-1 ring-amber-400/50' : 'bg-celestial-950/70 border-amber-500/25 hover:border-amber-400/60 hover:bg-celestial-950')}
+                        >
+                          <div className="flex items-start justify-between gap-1 mb-1">
+                            <div>
+                              <span className="text-[11px] font-bold text-amber-300 font-mono block">
+                                #{cmd.numero_comanda || ('BISTRO-' + cmd.id_pedido)}
+                              </span>
+                              <span className="text-xs font-semibold text-luar-100 block">
+                                {cmd.nome_cliente || 'Consumidor'}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {cmd.local_consumo || 'Balcão'}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-luar-200/80 mb-2 line-clamp-2">
+                            {cmd.itens?.map(it => it.quantidade + 'x ' + it.nome_item).join(', ')}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-ouro/15">
+                            <span className="font-serif font-bold text-sm text-ouro">
+                              {formatBRL(cmd.total)}
+                            </span>
+                            <button
+                              type="button"
+                              id={'btn-puxar-comanda-' + cmd.id_pedido}
+                              onClick={() => puxarComandaParaCaixa(cmd)}
+                              className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-ouro hover:from-ouro hover:to-amber-500 text-celestial-950 text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                            >
+                              <span>⚡</span>
+                              <span>Puxar</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUNA 2: CATÁLOGO RÁPIDO DE PRODUTOS (5 colunas no lg) */}
+                <div className="lg:col-span-5 bg-celestial-900/90 border border-ouro/30 rounded-2xl p-3 flex flex-col overflow-hidden shadow-xl">
+                  {/* Busca e Filtros */}
+                  <div className="space-y-2 pb-2 mb-2 border-b border-ouro/20">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          id="pdv-busca-produto"
+                          value={pdvBuscaProduto}
+                          onChange={e => setPdvBuscaProduto(e.target.value)}
+                          placeholder="🔍 Buscar produto por nome..."
+                          className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-1.5 text-xs text-luar-100 placeholder-luar-300/50 focus:outline-none focus:border-ouro"
+                        />
+                        {pdvBuscaProduto && (
+                          <button
+                            type="button"
+                            onClick={() => setPdvBuscaProduto('')}
+                            className="absolute right-2.5 top-1.5 text-xs text-ouro hover:text-white"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Filtros de Categoria */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                      {['Todos', 'Cafeteria', 'Moda', 'Pet'].map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setPdvAbaCategoria(cat)}
+                          className={"px-2.5 py-1 rounded-lg text-[10.5px] font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer " + (pdvAbaCategoria === cat ? 'bg-ouro text-celestial-950 shadow-sm' : 'bg-celestial-950 text-luar-200 hover:text-ouro border border-ouro/20')}
+                        >
+                          {cat === 'Cafeteria' ? '☕ Bistrô' : (cat === 'Moda' ? '👗 Moda' : (cat === 'Pet' ? '🐾 Pet' : '✨ Todos'))}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Grid de Produtos */}
+                  <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 pr-1">
+                    {produtos
+                      .filter(p => {
+                        const matchCat = pdvAbaCategoria === 'Todos' || p.categoria === pdvAbaCategoria;
+                        const matchBusca = !pdvBuscaProduto || p.nome_item.toLowerCase().includes(pdvBuscaProduto.toLowerCase());
+                        return matchCat && matchBusca;
+                      })
+                      .map(p => {
+                        const ehAlimento = p.categoria === 'Cafeteria';
+                        const estoqueNum = p.estoque !== undefined ? Number(p.estoque) : 10;
+                        const esgotado = !ehAlimento && estoqueNum <= 0;
+
+                        return (
+                          <div
+                            key={p.id_produto}
+                            id={'pdv-prod-card-' + p.id_produto}
+                            onClick={() => !esgotado && pdvAdicionarItem(p)}
+                            className={"group relative p-2 rounded-xl border transition-all flex flex-col justify-between text-left " + (esgotado ? 'opacity-50 cursor-not-allowed bg-stone-900 border-stone-800' : 'cursor-pointer bg-celestial-950/80 border-ouro/25 hover:border-ouro hover:bg-celestial-950 hover:shadow-md')}
+                          >
+                            <div className="space-y-1.5">
+                              <div className="w-full h-20 rounded-lg overflow-hidden bg-celestial-900 relative">
+                                <img src={p.imagem_url} alt={p.nome_item} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-black/75 text-ouro border border-ouro/30">
+                                  {p.categoria === 'Cafeteria' ? 'Bistrô' : p.categoria}
+                                </span>
+                              </div>
+                              <h4 className="text-[11px] font-bold text-luar-100 line-clamp-1 leading-snug group-hover:text-ouro transition-colors">
+                                {p.nome_item}
+                              </h4>
+                            </div>
+
+                            <div className="mt-1.5 pt-1.5 border-t border-ouro/15 flex items-center justify-between">
+                              <span className="font-serif font-bold text-xs text-ouro">
+                                {formatBRL(p.preco)}
+                              </span>
+                              {ehAlimento ? (
+                                <span className="text-[9px] text-amber-400 font-semibold">☕ Fresco</span>
+                              ) : esgotado ? (
+                                <span className="text-[9px] text-rose-400 font-bold">Esgotado</span>
+                              ) : estoqueNum === 1 ? (
+                                <span className="text-[9px] text-amber-300 font-bold">1 un</span>
+                              ) : (
+                                <span className="text-[9px] text-emerald-400 font-semibold">{estoqueNum} un</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* COLUNA 3: CUPOM ATIVO / FINALIZAÇÃO DA VENDA (4 colunas no lg) */}
+                <div className="lg:col-span-4 bg-celestial-900/95 border-2 border-ouro/50 rounded-2xl p-3 flex flex-col justify-between overflow-hidden shadow-2xl">
+                  {/* Topo do Cupom */}
+                  <div className="space-y-2 pb-2 border-b border-ouro/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">🧾</span>
+                        <h3 className="font-serif text-sm font-bold gold-gradient-text tracking-wide">
+                          Venda Ativa
+                        </h3>
+                      </div>
+                      {pdvComandaSelecionada && (
+                        <div className="flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            Comanda #{pdvComandaSelecionada.numero_comanda || pdvComandaSelecionada.id_pedido}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPdvComandaSelecionada(null)}
+                            className="text-stone-400 hover:text-rose-400 text-xs font-bold px-1"
+                            title="Desvincular comanda"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Dados do Cliente */}
+                    <div className="grid grid-cols-2 gap-2 text-left">
+                      <div>
+                        <label className="text-[9.5px] uppercase font-bold text-ouro/70 block">Cliente</label>
+                        <input
+                          type="text"
+                          id="pdv-cliente-nome"
+                          value={pdvClienteNome}
+                          onChange={e => setPdvClienteNome(e.target.value)}
+                          placeholder="Consumidor Final"
+                          className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9.5px] uppercase font-bold text-ouro/70 block">CPF (Opcional)</label>
+                        <input
+                          type="text"
+                          id="pdv-cliente-cpf"
+                          value={pdvClienteCpf}
+                          onChange={e => setPdvClienteCpf(formatarCpf(e.target.value))}
+                          placeholder="000.000.000-00"
+                          maxLength={14}
+                          className="w-full bg-celestial-950 border border-ouro/25 rounded-lg px-2 py-1 text-[11px] text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Itens do Caixa */}
+                  <div className="flex-1 overflow-y-auto space-y-1.5 my-2 pr-1 min-h-[140px]">
+                    {pdvItens.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4 text-luar-300/60">
+                        <span className="text-3xl mb-1">🛒</span>
+                        <p className="text-xs">Nenhum item adicionado ao caixa.</p>
+                        <p className="text-[10px] text-luar-400/50 mt-1">Clique nos produtos ao lado ou puxe uma comanda do bistrô.</p>
+                      </div>
+                    ) : (
+                      pdvItens.map(it => (
+                        <div key={it.id_produto} className="flex items-center justify-between p-2 rounded-xl bg-celestial-950/70 border border-ouro/20 text-xs">
+                          <div className="flex-1 pr-2 text-left">
+                            <span className="font-semibold text-luar-100 block line-clamp-1">{it.nome_item}</span>
+                            <span className="text-[10px] text-ouro/70">
+                              {formatBRL(it.preco)} cada
+                            </span>
+                          </div>
+
+                          {/* Ajuste de Qtd */}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => pdvAlterarQtd(it.id_produto, -1)}
+                              className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs hover:bg-ouro/20"
+                            >
+                              -
+                            </button>
+                            <span className="font-bold text-xs w-4 text-center">{it.quantidade}</span>
+                            <button
+                              type="button"
+                              onClick={() => pdvAlterarQtd(it.id_produto, 1)}
+                              className="w-5 h-5 rounded bg-celestial-900 border border-ouro/40 text-ouro flex items-center justify-center font-bold text-xs hover:bg-ouro/20"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <span className="font-serif font-bold text-ouro text-xs w-16 text-right">
+                            {formatBRL(Number(it.preco) * Number(it.quantidade))}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => pdvRemoverItem(it.id_produto)}
+                            className="text-stone-400 hover:text-rose-400 ml-1.5 text-xs font-bold"
+                            title="Remover item"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Totais & Formas de Pagamento */}
+                  <div className="space-y-2 pt-2 border-t border-ouro/30 bg-celestial-950/80 -mx-3 -mb-3 p-3 rounded-b-2xl">
+                    {/* Subtotal, Desconto e Total */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between items-center text-luar-300">
+                        <span>Subtotal:</span>
+                        <span>{formatBRL(pdvSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-luar-300">
+                        <span className="flex items-center gap-1">
+                          Desconto (R$):
+                        </span>
+                        <input
+                          type="number"
+                          id="pdv-desconto"
+                          value={pdvDesconto}
+                          onChange={e => setPdvDesconto(Math.max(0, Number(e.target.value)))}
+                          min="0"
+                          step="0.5"
+                          className="w-20 bg-celestial-900 border border-ouro/30 rounded px-1.5 py-0.5 text-right text-xs text-ouro focus:outline-none focus:border-ouro"
+                        />
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-ouro/20 font-bold">
+                        <span className="text-sm gold-gradient-text uppercase">Total a Pagar:</span>
+                        <span className="text-lg text-ouro font-serif" id="pdv-total-final">
+                          {formatBRL(pdvTotalFinal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Formas de Pagamento */}
+                    <div className="grid grid-cols-4 gap-1 pt-1">
+                      {[
+                        { id: 'Dinheiro', label: 'Dinheiro', icone: '💵' },
+                        { id: 'Cartao_Credito', label: 'Crédito', icone: '💳' },
+                        { id: 'Cartao_Debito', label: 'Débito', icone: '💳' },
+                        { id: 'PIX', label: 'PIX', icone: '📱' }
+                      ].map(fp => (
+                        <button
+                          key={fp.id}
+                          type="button"
+                          id={'btn-fp-' + fp.id}
+                          onClick={() => setPdvFormaPagamento(fp.id)}
+                          className={"py-1 px-1 rounded-lg text-[10px] font-bold flex flex-col items-center justify-center transition-all cursor-pointer " + (pdvFormaPagamento === fp.id ? 'bg-ouro text-celestial-950 ring-2 ring-ouro-light shadow-md' : 'bg-celestial-900 border border-ouro/30 text-luar-200 hover:text-ouro')}
+                        >
+                          <span className="text-xs">{fp.icone}</span>
+                          <span>{fp.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Se Dinheiro: Campo Valor Recebido e Troco */}
+                    {pdvFormaPagamento === 'Dinheiro' && (
+                      <div className="p-2 rounded-xl bg-celestial-900 border border-amber-500/30 space-y-1.5 text-left animate-fadeIn">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-[10px] font-bold uppercase text-amber-300">Valor Recebido (R$):</label>
+                          <input
+                            type="number"
+                            id="pdv-valor-recebido"
+                            value={pdvValorRecebido}
+                            onChange={e => setPdvValorRecebido(e.target.value)}
+                            placeholder="0,00"
+                            step="any"
+                            className="w-24 bg-celestial-950 border border-amber-400/50 rounded-lg px-2 py-1 text-right text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+
+                        {/* Atalhos rápidos de valores em dinheiro */}
+                        <div className="flex items-center gap-1 justify-end text-[10px]">
+                          <button
+                            type="button"
+                            id="btn-atalho-exato"
+                            onClick={() => setPdvValorRecebido(pdvTotalFinal.toFixed(2))}
+                            className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20"
+                          >
+                            Exato
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-atalho-prox10"
+                            onClick={() => setPdvValorRecebido((Math.ceil(pdvTotalFinal / 10) * 10).toFixed(2))}
+                            className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20"
+                          >
+                            +Próx. R$ 10
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-atalho-cinquenta"
+                            onClick={() => setPdvValorRecebido('50.00')}
+                            className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20"
+                          >
+                            R$ 50
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-atalho-cem"
+                            onClick={() => setPdvValorRecebido('100.00')}
+                            className="px-1.5 py-0.5 rounded bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/20"
+                          >
+                            R$ 100
+                          </button>
+                        </div>
+
+                        {/* Visualizador de Troco em Tempo Real */}
+                        <div className="pt-1 flex items-center justify-between text-xs font-bold border-t border-ouro/15">
+                          <span>Troco a Devolver:</span>
+                          <span
+                            id="pdv-mostrador-troco"
+                            className={"text-sm font-serif " + (pdvTroco > 0 ? 'text-emerald-400' : 'text-luar-300')}
+                          >
+                            {formatBRL(pdvTroco)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Botão de Finalização da Venda */}
+                    <button
+                      type="button"
+                      id="btn-finalizar-venda-pdv"
+                      onClick={pdvFinalizarVenda}
+                      disabled={finalizandoPdv || pdvItens.length === 0}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-500 hover:brightness-110 text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {finalizandoPdv ? (
+                        <span>⏳ Processando Venda...</span>
+                      ) : (
+                        <>
+                          <span>✨ Finalizar Venda &amp; Emitir Cupom</span>
+                          <span>(F2)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DO CUPOM TÉRMICO NÃO FISCAL (FORMATO 80MM PARA IMPRESSÃO) */}
+          {/* ==================================================================== */}
+          {cupomPdvModal && (
+            <div id="modal-cupom-pdv" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-md bg-stone-50 text-stone-900 rounded-3xl p-6 sm:p-7 space-y-4 shadow-2xl border-2 border-ouro/60 max-h-[92vh] overflow-y-auto font-mono text-xs">
+                
+                {/* Botão de fechar */}
+                <button
+                  type="button"
+                  id="btn-fechar-cupom-x"
+                  onClick={() => setCupomPdvModal(null)}
+                  className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-xl font-bold cursor-pointer print:hidden"
+                >
+                  ×
+                </button>
+
+                {/* Cabeçalho do Cupom 80mm */}
+                <div className="text-center space-y-1">
+                  <div className="w-12 h-12 mx-auto rounded-full border border-stone-800 p-0.5 overflow-hidden">
+                    <img src="/logo.jpg" alt="Vênus e Luar Logo" className="w-full h-full object-cover rounded-full" />
+                  </div>
+                  <h3 className="font-serif font-bold text-sm uppercase tracking-wider text-stone-900">
+                    Vênus &amp; Luar Boutique
+                  </h3>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    DOCUMENTO AUXILIAR DE VENDA • CUPOM NÃO FISCAL
+                  </p>
+                  <p className="text-[9px] text-stone-500 leading-tight">
+                    CNPJ: 45.123.890/0001-99 • IE: 112.345.678.910
+                  </p>
+                  <p className="text-[9px] text-stone-500 leading-tight">
+                    Alameda dos Jardins, 1020 • Jardins, São Paulo - SP
+                  </p>
+                  <div className="text-[10px] text-stone-400 select-none py-0.5">
+                    ------------------------------------------------
+                  </div>
+                </div>
+
+                {/* Metadados da Venda */}
+                <div className="space-y-0.5 text-[10.5px]">
+                  <div className="flex justify-between">
+                    <span className="font-bold">CUPOM Nº:</span>
+                    <span>{cupomPdvModal.numero_cupom}</span>
+                  </div>
+                  {cupomPdvModal.numero_comanda && (
+                    <div className="flex justify-between">
+                      <span className="font-bold">COMANDA ORIGEM:</span>
+                      <span>{cupomPdvModal.numero_comanda}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="font-bold">DATA / HORA:</span>
+                    <span>{new Date(cupomPdvModal.data_hora).toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold">OPERADOR:</span>
+                    <span>{cupomPdvModal.operador}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold">CLIENTE:</span>
+                    <span>{cupomPdvModal.cliente}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold">CPF CLIENTE:</span>
+                    <span>{cupomPdvModal.cpf || 'Não informado'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold">LOCAL:</span>
+                    <span>{cupomPdvModal.local}</span>
+                  </div>
+                  <div className="text-[10px] text-stone-400 select-none py-0.5 text-center">
+                    ------------------------------------------------
+                  </div>
+                </div>
+
+                {/* Tabela de Itens */}
+                <div className="space-y-1 text-[10.5px]">
+                  <div className="flex justify-between font-bold border-b border-stone-300 pb-0.5 text-[9.5px]">
+                    <span>QTD ITEM</span>
+                    <span>TOTAL (R$)</span>
+                  </div>
+                  {cupomPdvModal.itens?.map((it, idx) => (
+                    <div key={idx} className="flex justify-between items-start text-left">
+                      <span className="flex-1 pr-2">
+                        {it.quantidade}x {it.nome_item}
+                      </span>
+                      <span className="font-bold">
+                        {(Number(it.preco) * Number(it.quantidade)).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="text-[10px] text-stone-400 select-none py-0.5 text-center">
+                    ------------------------------------------------
+                  </div>
+                </div>
+
+                {/* Totais do Cupom */}
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>R$ {cupomPdvModal.subtotal.toFixed(2)}</span>
+                  </div>
+                  {cupomPdvModal.desconto > 0 && (
+                    <div className="flex justify-between text-rose-700">
+                      <span>Desconto Concedido:</span>
+                      <span>- R$ {cupomPdvModal.desconto.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-sm border-t border-b border-stone-800 py-1">
+                    <span>TOTAL LIQUIDADO:</span>
+                    <span>R$ {cupomPdvModal.total.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-0.5">
+                    <span>FORMA DE PGTO:</span>
+                    <span className="font-bold uppercase">{cupomPdvModal.forma_pagamento}</span>
+                  </div>
+                  {cupomPdvModal.forma_pagamento.includes('Dinheiro') && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>VALOR RECEBIDO:</span>
+                        <span>R$ {cupomPdvModal.valor_recebido.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-emerald-800">
+                        <span>TROCO ENTREGUE:</span>
+                        <span>R$ {cupomPdvModal.troco.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="text-[10px] text-stone-400 select-none py-0.5 text-center">
+                    ------------------------------------------------
+                  </div>
+                </div>
+
+                {/* Autenticação e Rodapé */}
+                <div className="text-center space-y-1 text-[9px] text-stone-500">
+                  <p className="font-bold text-stone-700">CHAVE DE AUTENTICAÇÃO DIGITAL:</p>
+                  <p className="font-mono break-all text-[8px] bg-stone-200/70 p-1 rounded">
+                    {cupomPdvModal.chave_autenticacao}
+                  </p>
+                  <p className="pt-1">Agradecemos a sua preferência!</p>
+                  <p>Volte sempre à Vênus e Luar Boutique.</p>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex gap-2 pt-2 border-t border-stone-300 print:hidden font-sans">
+                  <button
+                    type="button"
+                    id="btn-imprimir-cupom-pdv"
+                    onClick={() => window.print()}
+                    className="flex-1 py-2.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold uppercase transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    <span>🖨️</span>
+                    <span>Imprimir 80mm</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-fechar-cupom-pdv"
+                    onClick={() => {
+                      setCupomPdvModal(null);
+                      pdvLimparVenda();
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all cursor-pointer shadow-md"
+                  >
+                    ✨ Nova Venda
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* MODAL DE FATURA OFICIAL DIGITAL */}
           {/* ==================================================================== */}
           {faturaModal && (
@@ -9581,8 +10391,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Servir HTML da SPA na raiz com No-Cache explícito
-  if (pathname === '/' || pathname === '/index.html') {
+  // Servir HTML da SPA na raiz ou na rota do PDV com No-Cache explícito
+  if (pathname === '/' || pathname === '/index.html' || pathname === '/pdv') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(getFrontendHtml());
     return;
@@ -10799,6 +11609,161 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ erro: 'Erro ao processar status da comanda.' }));
+      }
+    });
+    return;
+  }
+
+  // ================================================================
+  // PDV / FRENTE DE CAIXA: COMANDAS ABERTAS E FINALIZAÇÃO DE VENDAS
+  // ================================================================
+
+  // GET /api/pdv/comandas-abertas
+  if (pathname === '/api/pdv/comandas-abertas' && req.method === 'GET') {
+    const comandasAbertas = pedidos.filter(p => {
+      const st = (p.status || '').toLowerCase();
+      const ehBistro = p.tipo_pedido === 'Bistrô' || st.includes('bistrô') || st.includes('pendente no caixa');
+      const jaPago = st.includes('pago no caixa') || st.includes('pago no pdv') || st.includes('cancelado');
+      return ehBistro && !jaPago;
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(comandasAbertas));
+    return;
+  }
+
+  // POST /api/pdv/finalizar-venda
+  if (pathname === '/api/pdv/finalizar-venda' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const dados = JSON.parse(body);
+        const {
+          id_pedido,
+          itens,
+          desconto = 0,
+          forma_pagamento = 'Dinheiro Físico',
+          valor_recebido = 0,
+          troco = 0,
+          nome_cliente,
+          cpf_cliente,
+          local_consumo,
+          nome_operador
+        } = dados;
+
+        if (!itens || !Array.isArray(itens) || itens.length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O carrinho do PDV não possui itens para finalizar a venda.' }));
+          return;
+        }
+
+        // Se houver peças físicas (Moda e Pet), realiza a baixa no estoque
+        for (const it of itens) {
+          const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
+          if (prodNoBanco && prodNoBanco.categoria !== 'Cafeteria') {
+            const estoqueAtual = prodNoBanco.estoque !== undefined ? Number(prodNoBanco.estoque) : 10;
+            prodNoBanco.estoque = Math.max(0, estoqueAtual - Number(it.quantidade));
+          }
+        }
+        salvarProdutosNoDisco();
+
+        const subtotal = itens.reduce((acc, it) => acc + (Number(it.preco) * Number(it.quantidade)), 0);
+        const descValor = Number(desconto) || 0;
+        const totalFinal = Math.max(0, subtotal - descValor);
+
+        const operador = nome_operador || 'Operador Caixa';
+        const dataVenda = new Date().toISOString();
+        const numeroCupom = `CUPOM-PDV-${1000 + pedidos.length + 1}`;
+        const chaveAutenticacao = crypto.createHash('sha256')
+          .update(`${numeroCupom}:${totalFinal}:${dataVenda}:${operador}`)
+          .digest('hex').slice(0, 32).toUpperCase();
+
+        let pedidoAtualizado = null;
+
+        if (id_pedido) {
+          // Liquidando comanda existente do bistrô
+          pedidoAtualizado = pedidos.find(p => p.id_pedido === Number(id_pedido) || p.numero_comanda === id_pedido);
+          if (pedidoAtualizado) {
+            pedidoAtualizado.itens = itens;
+            pedidoAtualizado.total = Number(totalFinal.toFixed(2));
+            pedidoAtualizado.desconto = descValor;
+            pedidoAtualizado.forma_pagamento = forma_pagamento || 'Dinheiro Físico';
+            pedidoAtualizado.detalhes_pagamento = {
+              ...(pedidoAtualizado.detalhes_pagamento || {}),
+              tipo: 'PDV Balcão',
+              valor_recebido: Number(valor_recebido) || totalFinal,
+              troco: Number(troco) || 0,
+              operador: operador,
+              pago_em: dataVenda
+            };
+            pedidoAtualizado.status = 'Pago no Caixa & Entregue';
+            pedidoAtualizado.numero_cupom = numeroCupom;
+            pedidoAtualizado.chave_autenticacao = chaveAutenticacao;
+          }
+        }
+
+        if (!pedidoAtualizado) {
+          // Nova venda direta avulsa no PDV
+          pedidoAtualizado = {
+            id_pedido: pedidos.length + 1001,
+            tipo_pedido: 'PDV',
+            numero_comanda: numeroCupom,
+            numero_fatura: numeroCupom,
+            numero_cupom: numeroCupom,
+            chave_autenticacao: chaveAutenticacao,
+            nome_cliente: (nome_cliente || 'Consumidor Final').trim(),
+            cpf_cliente: cpf_cliente ? formatarCpf(cpf_cliente.replace(/\D/g, '')) : 'Não informado',
+            total: Number(totalFinal.toFixed(2)),
+            desconto: descValor,
+            subtotal: Number(subtotal.toFixed(2)),
+            itens,
+            forma_pagamento: forma_pagamento || 'Dinheiro Físico',
+            local_consumo: local_consumo || 'Venda Balcão / PDV',
+            detalhes_pagamento: {
+              tipo: 'PDV Balcão',
+              valor_recebido: Number(valor_recebido) || totalFinal,
+              troco: Number(troco) || 0,
+              operador: operador,
+              pago_em: dataVenda
+            },
+            status: 'Pago no PDV',
+            criado_em: dataVenda
+          };
+          pedidos.unshift(pedidoAtualizado);
+        }
+
+        salvarPedidosNoDisco();
+
+        // Monta o Cupom Não Fiscal para exibição e impressão
+        const cupomPdv = {
+          numero_cupom: numeroCupom,
+          numero_comanda: pedidoAtualizado.numero_comanda,
+          data_hora: dataVenda,
+          operador: operador,
+          cliente: pedidoAtualizado.nome_cliente,
+          cpf: pedidoAtualizado.cpf_cliente,
+          local: pedidoAtualizado.local_consumo,
+          itens: pedidoAtualizado.itens,
+          subtotal: Number(subtotal.toFixed(2)),
+          desconto: descValor,
+          total: Number(totalFinal.toFixed(2)),
+          forma_pagamento: pedidoAtualizado.forma_pagamento,
+          valor_recebido: Number(valor_recebido) || totalFinal,
+          troco: Number(troco) || 0,
+          chave_autenticacao: chaveAutenticacao
+        };
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          mensagem: 'Venda finalizada com sucesso no PDV!',
+          pedido: pedidoAtualizado,
+          cupom: cupomPdv
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao processar venda no PDV.' }));
       }
     });
     return;

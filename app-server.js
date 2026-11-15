@@ -11238,6 +11238,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
 
         const novoPedidoFaturado = {
           id_pedido: pedidos.length + 1001,
+          tipo_pedido: 'E-commerce',
+          origem: 'Boutique E-commerce (Site)',
+          tipo_documento: 'Pessoa Física',
           numero_fatura: numeroFatura,
           chave_autenticacao: chaveAutenticacao,
           id_usuario: userId || null,
@@ -11251,6 +11254,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             ? `${endereco_entrega.logradouro || ''}, nº ${endereco_entrega.numero || 'S/N'}${endereco_entrega.complemento ? ' (' + endereco_entrega.complemento + ')' : ''} - ${endereco_entrega.bairro || ''}, ${endereco_entrega.cidade || ''}/${endereco_entrega.uf || 'ES'} - CEP: ${endereco_entrega.cep || ''}`
             : endereco_entrega,
           status: 'Faturado & Pago',
+          status_faturamento: 'Faturado',
+          faturado_em: new Date().toISOString(),
           criado_em: new Date().toISOString()
         };
 
@@ -11313,8 +11318,11 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         const novoPedidoBistro = {
           id_pedido: pedidos.length + 1001,
           tipo_pedido: 'Bistrô',
+          origem: 'Bistrô (Site da Boutique)',
+          tipo_documento: 'Pessoa Física',
           numero_comanda: numeroComanda,
           numero_fatura: numeroComanda,
+          status_faturamento: 'Pendente',
           chave_autenticacao: chaveAutenticacao,
           id_usuario: id_usuario || null,
           nome_cliente: nome,

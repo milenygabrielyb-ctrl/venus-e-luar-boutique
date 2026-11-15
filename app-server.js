@@ -965,13 +965,14 @@ function getFrontendHtml() {
       };
 
       const adicionarAoCarrinho = (produto, customAtributos) => {
+        const ehAlimento = produto.categoria === 'Cafeteria';
         const estoqueDisponivel = produto.estoque !== undefined ? Number(produto.estoque) : 10;
-        if (estoqueDisponivel <= 0) {
+        if (!ehAlimento && estoqueDisponivel <= 0) {
           alert('Esta criação exclusiva está temporariamente esgotada no ateliê.');
           return false;
         }
         const itemExistente = itens.find(i => i.id_produto === produto.id_produto);
-        if (itemExistente && itemExistente.quantidade >= estoqueDisponivel) {
+        if (!ehAlimento && itemExistente && itemExistente.quantidade >= estoqueDisponivel) {
           alert('Limite de estoque atingido! Só há ' + estoqueDisponivel + ' unidade(s) desta peça exclusiva disponível.');
           return false;
         }
@@ -1374,6 +1375,10 @@ function getFrontendHtml() {
 
       const abrirModalEstoque = (prod) => {
         if (!prod) return;
+        if (prod.categoria === 'Cafeteria') {
+          alert('Itens de Cafeteria e Bistrô são preparados sob demanda e não possuem controle de estoque.');
+          return;
+        }
         if (usuario?.role !== 'admin') {
           alert('Acesso restrito. Apenas administradores autorizados podem gerenciar o estoque.');
           return;
@@ -1994,8 +1999,9 @@ function getFrontendHtml() {
       // ================================================================
       const tentarAdicionarAoCarrinho = (produto, customAtributos) => {
         if (!produto) return false;
+        const ehAlimento = produto.categoria === 'Cafeteria';
         const estoqueDisponivel = produto.estoque !== undefined ? Number(produto.estoque) : 10;
-        if (estoqueDisponivel <= 0) {
+        if (!ehAlimento && estoqueDisponivel <= 0) {
           alert('Esta peça exclusiva está temporariamente esgotada no ateliê.');
           return false;
         }
@@ -2161,6 +2167,7 @@ function getFrontendHtml() {
                     Espaço Pet
                   </button>
                   <button 
+                    id="btn-nav-cafeteria"
                     onClick={() => setAbaAtiva('Cafeteria')} 
                     style={abaAtiva === 'Cafeteria' ? {
                       background: 'linear-gradient(135deg, #FFE8A3 0%, #DFB15B 50%, #B88B35 100%)',
@@ -2615,17 +2622,26 @@ function getFrontendHtml() {
                         </span>
 
                         {/* Alerta de Última Peça ou Esgotado sobre a imagem */}
-                        {prod.estoque === 1 && (
-                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500 text-celestial-950 border border-amber-300 shadow-xl animate-pulse flex items-center gap-1 font-sans">
-                            <span>⚠️</span>
-                            <span>Última peça em estoque</span>
+                        {prod.categoria === 'Cafeteria' ? (
+                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-200 border border-amber-500/40 shadow-xl flex items-center gap-1 font-sans backdrop-blur-sm">
+                            <span>☕</span>
+                            <span>Preparo Fresco</span>
                           </span>
-                        )}
-                        {prod.estoque === 0 && (
-                          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-rose-600 text-white border border-rose-300 shadow-xl flex items-center gap-1 font-sans">
-                            <span>✕</span>
-                            <span>Esgotado</span>
-                          </span>
+                        ) : (
+                          <>
+                            {prod.estoque === 1 && (
+                              <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500 text-celestial-950 border border-amber-300 shadow-xl animate-pulse flex items-center gap-1 font-sans">
+                                <span>⚠️</span>
+                                <span>Última peça em estoque</span>
+                              </span>
+                            )}
+                            {prod.estoque === 0 && (
+                              <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-rose-600 text-white border border-rose-300 shadow-xl flex items-center gap-1 font-sans">
+                                <span>✕</span>
+                                <span>Esgotado</span>
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
 
@@ -2648,22 +2664,33 @@ function getFrontendHtml() {
                           {prod.atributos?.tamanho_pet && <span className="text-[10px] bg-celestial-950 text-ouro/90 border border-ouro/20 px-2 py-0.5 rounded">Porte: {prod.atributos.tamanho_pet}</span>}
                         </div>
 
-                        {/* Alerta de Estoque Crítico no Corpo do Card */}
-                        {prod.estoque === 1 && (
+                        {/* Alerta de Estoque Crítico no Corpo do Card ou Aviso de Bistrô */}
+                        {prod.categoria === 'Cafeteria' ? (
                           <div className="pt-2">
-                            <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
-                              <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
-                              <span>Última peça em estoque</span>
+                            <span className="text-[11px] font-medium text-amber-200/90 flex items-center gap-1.5 bg-amber-950/30 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                              <span>☕</span>
+                              <span>Preparo artesanal no bistrô (sem estoque)</span>
                             </span>
                           </div>
-                        )}
-                        {prod.estoque === 0 && (
-                          <div className="pt-2">
-                            <span className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 px-2.5 py-1 rounded-lg">
-                              <span>✕</span>
-                              <span>Peça esgotada no ateliê</span>
-                            </span>
-                          </div>
+                        ) : (
+                          <>
+                            {prod.estoque === 1 && (
+                              <div className="pt-2">
+                                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
+                                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+                                  <span>Última peça em estoque</span>
+                                </span>
+                              </div>
+                            )}
+                            {prod.estoque === 0 && (
+                              <div className="pt-2">
+                                <span className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 px-2.5 py-1 rounded-lg">
+                                  <span>✕</span>
+                                  <span>Peça esgotada no ateliê</span>
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -2678,18 +2705,20 @@ function getFrontendHtml() {
                         {/* Botões Exclusivos para Administrador (Estoque, Editar e Excluir) */}
                         {usuario?.role === 'admin' && (
                           <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                abrirModalEstoque(prod);
-                              }}
-                              className="px-2.5 py-2 rounded-xl bg-celestial-900 hover:bg-ouro/25 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
-                              title="Gerenciar estoque desta peça"
-                            >
-                              <span>📦</span>
-                              <span>{prod.estoque !== undefined ? prod.estoque : 10}</span>
-                            </button>
+                            {prod.categoria !== 'Cafeteria' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  abrirModalEstoque(prod);
+                                }}
+                                className="px-2.5 py-2 rounded-xl bg-celestial-900 hover:bg-ouro/25 border border-ouro/40 text-ouro hover:text-ouro-light transition-all cursor-pointer shadow-sm flex items-center gap-1 text-[11px] font-bold"
+                                title="Gerenciar estoque desta peça"
+                              >
+                                <span>📦</span>
+                                <span>{prod.estoque !== undefined ? prod.estoque : 10}</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2722,7 +2751,20 @@ function getFrontendHtml() {
                         )}
 
                         {/* Botão Comprar com Proteção de Estoque e Permissionamento */}
-                        {prod.estoque === 0 ? (
+                        {prod.categoria === 'Cafeteria' ? (
+                          <button
+                            type="button"
+                            onClick={() => tentarAdicionarAoCarrinho(prod)}
+                            className="px-4 py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950"
+                          >
+                            {!usuario && (
+                              <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                              </svg>
+                            )}
+                            <span>☕ Pedir no Bistrô</span>
+                          </button>
+                        ) : prod.estoque === 0 ? (
                           <button
                             type="button"
                             disabled
@@ -3099,29 +3141,43 @@ function getFrontendHtml() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] uppercase font-bold text-ouro bg-celestial-950 border border-ouro/30 px-2.5 py-0.5 rounded">{produtoModal.categoria}</span>
-                      {Number(produtoModal.estoque ?? 10) === 1 && (
-                        <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/20 border border-amber-400/60 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
-                          <span>⚡</span> Última peça
+                      {produtoModal.categoria === 'Cafeteria' ? (
+                        <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/20 border border-amber-400/60 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <span>☕</span> Preparo artesanal fresco sob demanda
                         </span>
-                      )}
-                      {Number(produtoModal.estoque ?? 10) === 0 && (
-                        <span className="text-[10px] uppercase font-bold text-rose-300 bg-rose-500/20 border border-rose-500/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                          <span>✕</span> Esgotado
-                        </span>
+                      ) : (
+                        <>
+                          {Number(produtoModal.estoque ?? 10) === 1 && (
+                            <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/20 border border-amber-400/60 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1 shadow-sm">
+                              <span>⚡</span> Última peça
+                            </span>
+                          )}
+                          {Number(produtoModal.estoque ?? 10) === 0 && (
+                            <span className="text-[10px] uppercase font-bold text-rose-300 bg-rose-500/20 border border-rose-500/60 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                              <span>✕</span> Esgotado
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                     <h3 className="font-serif text-xl font-bold text-ouro-light mt-1">{produtoModal.nome_item}</h3>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-lg font-serif font-bold text-ouro">{formatBRL(produtoModal.preco)}</span>
-                      <span className="text-[11px] text-luar-400 font-mono">
-                        (Estoque: <strong className={Number(produtoModal.estoque ?? 10) === 0 ? 'text-rose-400' : Number(produtoModal.estoque ?? 10) === 1 ? 'text-amber-400' : 'text-emerald-400'}>{produtoModal.estoque ?? 10} un.</strong>)
-                      </span>
+                      {produtoModal.categoria === 'Cafeteria' ? (
+                        <span className="text-[11px] text-amber-300/80 font-sans italic">
+                          (Preparo artesanal fresco sob demanda — sem controle de estoque)
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-luar-400 font-mono">
+                          (Estoque: <strong className={Number(produtoModal.estoque ?? 10) === 0 ? 'text-rose-400' : Number(produtoModal.estoque ?? 10) === 1 ? 'text-amber-400' : 'text-emerald-400'}>{produtoModal.estoque ?? 10} un.</strong>)
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Banner de Urgência / Esgotado */}
-                {Number(produtoModal.estoque ?? 10) === 1 && (
+                {produtoModal.categoria !== 'Cafeteria' && Number(produtoModal.estoque ?? 10) === 1 && (
                   <div className="p-3 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-200 text-xs font-bold flex items-center gap-3 animate-pulse shadow-md">
                     <span className="text-xl">⚡</span>
                     <div>
@@ -3130,7 +3186,7 @@ function getFrontendHtml() {
                     </div>
                   </div>
                 )}
-                {Number(produtoModal.estoque ?? 10) === 0 && (
+                {produtoModal.categoria !== 'Cafeteria' && Number(produtoModal.estoque ?? 10) === 0 && (
                   <div className="p-3 rounded-2xl bg-rose-500/20 border-2 border-rose-500 text-rose-200 text-xs font-bold flex items-center gap-3 shadow-md">
                     <span className="text-xl">✕</span>
                     <div>
@@ -3194,23 +3250,41 @@ function getFrontendHtml() {
                         <span>✏️</span>
                         <span>Editar</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const prod = produtoModal;
-                          setProdutoModal(null);
-                          abrirModalEstoque(prod);
-                        }}
-                        className="px-3.5 py-3.5 rounded-xl bg-celestial-950 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/20 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                        title="Gerenciar estoque desta peça"
-                      >
-                        <span>📦</span>
-                        <span>Estoque ({produtoModal.estoque ?? 10})</span>
-                      </button>
+                      {produtoModal.categoria !== 'Cafeteria' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const prod = produtoModal;
+                            setProdutoModal(null);
+                            abrirModalEstoque(prod);
+                          }}
+                          className="px-3.5 py-3.5 rounded-xl bg-celestial-950 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/20 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Gerenciar estoque desta peça"
+                        >
+                          <span>📦</span>
+                          <span>Estoque ({produtoModal.estoque ?? 10})</span>
+                        </button>
+                      )}
                     </>
                   )}
 
-                  {Number(produtoModal.estoque ?? 10) === 0 ? (
+                  {produtoModal.categoria === 'Cafeteria' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ok = tentarAdicionarAoCarrinho(produtoModal);
+                        if (ok) setProdutoModal(null);
+                      }}
+                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {!usuario && (
+                        <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                      )}
+                      <span>☕ Adicionar ao Pedido do Bistrô</span>
+                    </button>
+                  ) : Number(produtoModal.estoque ?? 10) === 0 ? (
                     <button
                       type="button"
                       disabled
@@ -3525,16 +3599,23 @@ function getFrontendHtml() {
                       <label className="block text-[11px] font-bold text-ouro mb-1 uppercase tracking-wider">
                         Estoque
                       </label>
-                      <input 
-                        name="edit_estoque" 
-                        type="number" 
-                        min="0" 
-                        value={editEstoque} 
-                        onChange={(e) => setEditEstoque(e.target.value)} 
-                        required 
-                        placeholder="Ex: 10" 
-                        className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
-                      />
+                      {editCategoria === 'Cafeteria' ? (
+                        <div className="w-full p-2.5 rounded-xl bg-celestial-950 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-1.5 font-sans">
+                          <span>☕</span>
+                          <span>Preparo sob demanda (sem estoque)</span>
+                        </div>
+                      ) : (
+                        <input 
+                          name="edit_estoque" 
+                          type="number" 
+                          min="0" 
+                          value={editEstoque} 
+                          onChange={(e) => setEditEstoque(e.target.value)} 
+                          required 
+                          placeholder="Ex: 10" 
+                          className="w-full p-3 rounded-xl bg-celestial-950 border border-ouro/30 text-xs text-luar-100 outline-none focus:border-ouro font-mono" 
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -7456,10 +7537,10 @@ function getFrontendHtml() {
                       </div>
                       <div className="flex items-center gap-2 text-xs font-mono shrink-0">
                         <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 font-semibold">
-                          ⚡ {produtos.filter(p => Number(p.estoque ?? 10) === 1).length} Última peça
+                          ⚡ {produtos.filter(p => p.categoria !== 'Cafeteria' && Number(p.estoque ?? 10) === 1).length} Última peça
                         </span>
                         <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 font-semibold">
-                          ✕ {produtos.filter(p => Number(p.estoque ?? 10) === 0).length} Esgotadas
+                          ✕ {produtos.filter(p => p.categoria !== 'Cafeteria' && Number(p.estoque ?? 10) === 0).length} Esgotadas
                         </span>
                       </div>
                     </div>
@@ -7474,7 +7555,11 @@ function getFrontendHtml() {
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-xs font-serif text-ouro font-semibold">{formatBRL(p.preco)}</span>
                                 <span className="text-luar-400 text-[10px]">•</span>
-                                {Number(p.estoque ?? 10) === 1 ? (
+                                {p.categoria === 'Cafeteria' ? (
+                                  <span className="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-md font-sans flex items-center gap-1">
+                                    ☕ Feito sob demanda (sem estoque)
+                                  </span>
+                                ) : Number(p.estoque ?? 10) === 1 ? (
                                   <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-400/50 px-2 py-0.5 rounded-md animate-pulse">
                                     ⚡ 1 un. (Última peça!)
                                   </span>
@@ -7491,17 +7576,19 @@ function getFrontendHtml() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsAdminOpen(false);
-                                abrirModalEstoque(p);
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 hover:text-emerald-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-                              title="Ajustar estoque desta peça"
-                            >
-                              <span>📦 Estoque</span>
-                            </button>
+                            {p.categoria !== 'Cafeteria' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAdminOpen(false);
+                                  abrirModalEstoque(p);
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 hover:text-emerald-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                                title="Ajustar estoque desta peça"
+                              >
+                                <span>📦 Estoque</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -9230,6 +9317,12 @@ const server = http.createServer((req, res) => {
           return;
         }
 
+        if (produto.categoria === 'Cafeteria') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Itens de Cafeteria e Bistrô são preparados sob demanda e não possuem controle de estoque.' }));
+          return;
+        }
+
         const novoEstoque = Math.max(0, parseInt(dados.estoque, 10) || 0);
         produto.estoque = novoEstoque;
         salvarProdutosNoDisco();
@@ -10017,7 +10110,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { id_usuario, nome_cliente, cpf_cliente, itens, forma_pagamento, detalhes_pagamento, endereco_entrega } = JSON.parse(body);
+        const { id_usuario, nome_cliente, cpf_cliente, cpf, itens, forma_pagamento, detalhes_pagamento, endereco_entrega } = JSON.parse(body);
 
         if (!itens || !Array.isArray(itens) || itens.length === 0) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -10026,7 +10119,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         }
 
         // Validação obrigatória do CPF para emissão da fatura oficial
-        const cpfLimpo = (cpf_cliente || '').replace(/[^0-9]/g, '');
+        const cpfRecebido = cpf_cliente || cpf || '';
+        const cpfLimpo = cpfRecebido.replace(/[^0-9]/g, '');
         if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ erro: 'O CPF é obrigatório e deve conter 11 dígitos válidos para emissão da nota fiscal digital.' }));
@@ -10059,10 +10153,10 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           }
         }
 
-        // Verificação estrita de estoque antes de emitir a fatura
+        // Verificação estrita de estoque antes de emitir a fatura (apenas Moda e Pet; Cafeteria é sob demanda)
         for (const it of itens) {
           const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
-          if (prodNoBanco) {
+          if (prodNoBanco && prodNoBanco.categoria !== 'Cafeteria') {
             const estoqueAtual = prodNoBanco.estoque !== undefined ? Number(prodNoBanco.estoque) : 10;
             if (estoqueAtual < Number(it.quantidade)) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -10076,10 +10170,10 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           }
         }
 
-        // Baixa automática de estoque após validação
+        // Baixa automática de estoque após validação (alimentos e bebidas não decrementam estoque)
         for (const it of itens) {
           const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
-          if (prodNoBanco) {
+          if (prodNoBanco && prodNoBanco.categoria !== 'Cafeteria') {
             const estoqueAtual = prodNoBanco.estoque !== undefined ? Number(prodNoBanco.estoque) : 10;
             prodNoBanco.estoque = Math.max(0, estoqueAtual - Number(it.quantidade));
           }

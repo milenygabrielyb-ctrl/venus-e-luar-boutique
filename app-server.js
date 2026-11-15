@@ -1096,6 +1096,18 @@ function getFrontendHtml() {
       const [ufCheckout, setUfCheckout] = useState('ES');
       const [buscandoCep, setBuscandoCep] = useState(false);
 
+      // Estados para Bistrô & Cafeteria - Pedido sem pagamento online (Pagamento no Caixa)
+      const [modalPedidoBistro, setModalPedidoBistro] = useState(null); // produto ou { itens: [...], ehCarrinho: true }
+      const [bistroQtd, setBistroQtd] = useState(1);
+      const [bistroLocalConsumo, setBistroLocalConsumo] = useState('Mesa'); // 'Mesa' | 'Balcao'
+      const [bistroNumeroMesa, setBistroNumeroMesa] = useState('');
+      const [bistroNomeCliente, setBistroNomeCliente] = useState('');
+      const [bistroObservacoes, setBistroObservacoes] = useState('');
+      const [bistroLeite, setBistroLeite] = useState('');
+      const [bistroTemperatura, setBistroTemperatura] = useState('');
+      const [enviandoPedidoBistro, setEnviandoPedidoBistro] = useState(false);
+      const [comandaBistroModal, setComandaBistroModal] = useState(null); // comanda emitida para conferência e pagamento no caixa
+
       // Estados para Gestão de Pets e Faturamento no Admin
       const [listaCandidaturas, setListaCandidaturas] = useState([]);
       const [relatorioFaturamento, setRelatorioFaturamento] = useState(null);
@@ -1995,13 +2007,113 @@ function getFrontendHtml() {
       };
 
       // ================================================================
-      // REGRA 2 DE PERMISSIONAMENTO: BLOQUEIA ADICIONAR À SACOLA SEM LOGIN
+      // REGRA 2 DE PERMISSIONAMENTO: BLOQUEIA ADICIONAR À SACOLA SEM LOGIN (MODA E PET)
+      // ITENS DE CAFETERIA / BISTRÔ: NÃO EXIGEM LOGIN, É SÓ PEDIR COM PAGAMENTO NO CAIXA!
       // ================================================================
+      const abrirPedidoBistro = (produto) => {
+        if (!produto) return;
+        setModalPedidoBistro(produto);
+        setBistroQtd(1);
+        setBistroLocalConsumo('Mesa');
+        setBistroNumeroMesa('');
+        setBistroNomeCliente(usuario?.nome || usuario?.nome_completo || '');
+        setBistroObservacoes('');
+        const leitePadrao = produto?.atributos?.opcoes_leite ? produto.atributos.opcoes_leite.split(',')[0].trim() : '';
+        setBistroLeite(leitePadrao);
+        setBistroTemperatura(produto?.atributos?.temperatura || 'Quente');
+      };
+
+      const abrirPedidoBistroCarrinho = () => {
+        const itensBistro = carrinho.itens.filter(i => i.categoria === 'Cafeteria');
+        if (itensBistro.length === 0) return;
+        setModalPedidoBistro({ itens: itensBistro, ehCarrinho: true });
+        setBistroLocalConsumo('Mesa');
+        setBistroNumeroMesa('');
+        setBistroNomeCliente(usuario?.nome || usuario?.nome_completo || '');
+        setBistroObservacoes('');
+        setIsCarrinhoOpen(false);
+      };
+
+      const confirmarPedidoBistro = async (e) => {
+        if (e) e.preventDefault();
+        if (!bistroNomeCliente.trim()) {
+          alert('Por favor, informe seu nome para a comanda do Bistrô.');
+          return;
+        }
+        if (bistroLocalConsumo === 'Mesa' && !bistroNumeroMesa.trim()) {
+          alert('Por favor, informe o número da mesa no Bistrô (ex: Mesa 03).');
+          return;
+        }
+
+        setEnviandoPedidoBistro(true);
+        try {
+          let itensParaEnviar = [];
+          if (modalPedidoBistro.ehCarrinho) {
+            itensParaEnviar = modalPedidoBistro.itens.map(it => ({
+              id_produto: it.id_produto,
+              nome_item: it.nome_item,
+              preco: it.preco,
+              quantidade: it.quantidade,
+              categoria: 'Cafeteria',
+              detalhes: it.detalhes || {}
+            }));
+          } else {
+            itensParaEnviar = [{
+              id_produto: modalPedidoBistro.id_produto,
+              nome_item: modalPedidoBistro.nome_item,
+              preco: modalPedidoBistro.preco,
+              quantidade: bistroQtd,
+              categoria: 'Cafeteria',
+              detalhes: {
+                leite: bistroLeite,
+                temperatura: bistroTemperatura
+              }
+            }];
+          }
+
+          const payload = {
+            id_usuario: usuario?.id_usuario || null,
+            nome_cliente: bistroNomeCliente.trim(),
+            local_consumo: bistroLocalConsumo === 'Mesa' ? ('Mesa ' + bistroNumeroMesa.trim().replace(/^mesa\s*/i, '')) : 'Balcão / Retirada',
+            observacoes: bistroObservacoes.trim(),
+            itens: itensParaEnviar
+          };
+
+          const res = await fetch('/api/bistro/pedidos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const json = await res.json();
+          if (res.ok && json.sucesso) {
+            if (modalPedidoBistro.ehCarrinho) {
+              modalPedidoBistro.itens.forEach(it => carrinho.remover(it.id_produto));
+            }
+            setModalPedidoBistro(null);
+            setComandaBistroModal(json.comanda);
+            carregarFaturamentoAdmin();
+            mostrarNotificacao('Pedido enviado para a cozinha do Bistrô! Pague no caixa ao retirar.');
+          } else {
+            alert(json.erro || 'Falha ao registrar pedido no bistrô.');
+          }
+        } catch (err) {
+          alert('Erro de conexão ao enviar pedido ao bistrô.');
+        } finally {
+          setEnviandoPedidoBistro(false);
+        }
+      };
+
       const tentarAdicionarAoCarrinho = (produto, customAtributos) => {
         if (!produto) return false;
         const ehAlimento = produto.categoria === 'Cafeteria';
+        if (ehAlimento) {
+          // Cafeteria / Bistrô é só pedir sem pagamento, pagamento direto no caixa!
+          abrirPedidoBistro(produto);
+          return true;
+        }
         const estoqueDisponivel = produto.estoque !== undefined ? Number(produto.estoque) : 10;
-        if (!ehAlimento && estoqueDisponivel <= 0) {
+        if (estoqueDisponivel <= 0) {
           alert('Esta peça exclusiva está temporariamente esgotada no ateliê.');
           return false;
         }
@@ -2659,7 +2771,7 @@ function getFrontendHtml() {
                           {prod.categoria === 'Cafeteria' ? (
                             <span className="text-[10px] sm:text-[10.5px] font-medium text-amber-200/90 inline-flex items-center gap-1.5 bg-amber-950/30 border border-amber-500/30 px-2.5 py-1 rounded-lg">
                               <span>☕</span>
-                              <span>Preparo artesanal no bistrô (sem estoque)</span>
+                              <span>Preparo artesanal • Pague no Caixa</span>
                             </span>
                           ) : prod.estoque === 1 ? (
                             <span className="text-[10px] sm:text-[10.5px] font-bold text-amber-300 inline-flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/50 px-2.5 py-1 rounded-lg animate-pulse">
@@ -2688,14 +2800,10 @@ function getFrontendHtml() {
                           {prod.categoria === 'Cafeteria' ? (
                             <button
                               type="button"
-                              onClick={() => tentarAdicionarAoCarrinho(prod)}
-                              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 whitespace-nowrap"
+                              onClick={() => abrirPedidoBistro(prod)}
+                              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-400 via-ouro to-amber-500 text-celestial-950 whitespace-nowrap"
+                              title="Pedir no Bistrô (Pagamento direto no caixa)"
                             >
-                              {!usuario && (
-                                <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                </svg>
-                              )}
                               <span>☕ Pedir no Bistrô</span>
                             </button>
                           ) : prod.estoque === 0 ? (
@@ -3054,7 +3162,15 @@ function getFrontendHtml() {
                           <img src={item.imagem_url} alt={item.nome_item} className="w-16 h-16 rounded-xl object-cover" />
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-bold text-ouro uppercase tracking-wider">{item.categoria}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-ouro uppercase tracking-wider">{item.categoria}</span>
+                                {item.categoria === 'Cafeteria' && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1">
+                                    <span>☕</span>
+                                    <span>Pagar no Caixa</span>
+                                  </span>
+                                )}
+                              </div>
                               <button onClick={() => carrinho.remover(item.id_produto)} className="text-stone-400 hover:text-rose-400 text-xs cursor-pointer">remover</button>
                             </div>
                             <h5 className="text-xs font-bold text-luar-100 truncate">{item.nome_item}</h5>
@@ -3079,39 +3195,56 @@ function getFrontendHtml() {
                         <span>Total do Pedido:</span>
                         <span className="text-ouro">{formatBRL(carrinho.total)}</span>
                       </div>
-                      <button
-                        id="btn-avancar-checkout"
-                        onClick={() => {
-                          if (!usuario) {
-                            mostrarNotificacao('Por favor, identifique-se para avançar ao pagamento.', 'aviso');
-                            setIsAuthOpen(true);
-                            return;
-                          }
-                          setNomeCheckout(usuario.nome || usuario.nome_completo || '');
-                          setNascimentoCheckout(usuario.data_nascimento || '');
-                          setCpfCheckout(usuario.cpf || '');
-                          if (usuario.endereco) {
-                            if (typeof usuario.endereco === 'object') {
-                              setCepCheckout(usuario.endereco.cep || '');
-                              setLogradouroCheckout(usuario.endereco.logradouro || '');
-                              setNumeroCheckout(usuario.endereco.numero || '');
-                              setComplementoCheckout(usuario.endereco.complemento || '');
-                              setBairroCheckout(usuario.endereco.bairro || '');
-                              setCidadeCheckout(usuario.endereco.cidade || '');
-                              setUfCheckout(usuario.endereco.uf || 'ES');
-                            } else if (typeof usuario.endereco === 'string') {
-                              setLogradouroCheckout(usuario.endereco);
+                      {carrinho.itens.every(i => i.categoria === 'Cafeteria') ? (
+                        <div className="space-y-2">
+                          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-2">
+                            <span>☕</span>
+                            <span>Itens do Bistrô: preparo fresco sob demanda com pagamento direto no caixa!</span>
+                          </div>
+                          <button
+                            id="btn-concluir-pedido-bistro"
+                            onClick={() => abrirPedidoBistroCarrinho()}
+                            className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-600 text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <span>☕ Concluir Pedido no Bistrô (Pagar no Caixa)</span>
+                            <span>➔</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          id="btn-avancar-checkout"
+                          onClick={() => {
+                            if (!usuario) {
+                              mostrarNotificacao('Por favor, identifique-se para avançar ao pagamento.', 'aviso');
+                              setIsAuthOpen(true);
+                              return;
                             }
-                          }
-                          setEtapaCheckout('dados');
-                          setIsCarrinhoOpen(false);
-                          setIsCheckoutOpen(true);
-                        }}
-                        className="w-full py-4 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-lg hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <span>Finalizar Compra &amp; Confirmar Dados</span>
-                        <span>➔</span>
-                      </button>
+                            setNomeCheckout(usuario.nome || usuario.nome_completo || '');
+                            setNascimentoCheckout(usuario.data_nascimento || '');
+                            setCpfCheckout(usuario.cpf || '');
+                            if (usuario.endereco) {
+                              if (typeof usuario.endereco === 'object') {
+                                setCepCheckout(usuario.endereco.cep || '');
+                                setLogradouroCheckout(usuario.endereco.logradouro || '');
+                                setNumeroCheckout(usuario.endereco.numero || '');
+                                setComplementoCheckout(usuario.endereco.complemento || '');
+                                setBairroCheckout(usuario.endereco.bairro || '');
+                                setCidadeCheckout(usuario.endereco.cidade || '');
+                                setUfCheckout(usuario.endereco.uf || 'ES');
+                              } else if (typeof usuario.endereco === 'string') {
+                                setLogradouroCheckout(usuario.endereco);
+                              }
+                            }
+                            setEtapaCheckout('dados');
+                            setIsCarrinhoOpen(false);
+                            setIsCheckoutOpen(true);
+                          }}
+                          className="w-full py-4 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-lg hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>Finalizar Compra &amp; Confirmar Dados</span>
+                          <span>➔</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -3258,21 +3391,32 @@ function getFrontendHtml() {
                   )}
 
                   {produtoModal.categoria === 'Cafeteria' ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const ok = tentarAdicionarAoCarrinho(produtoModal);
-                        if (ok) setProdutoModal(null);
-                      }}
-                      className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-ouro to-ouro-dark text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {!usuario && (
-                        <svg className="w-3.5 h-3.5 text-celestial-950/80 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                        </svg>
-                      )}
-                      <span>☕ Adicionar ao Pedido do Bistrô</span>
-                    </button>
+                    <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prod = produtoModal;
+                          setProdutoModal(null);
+                          abrirPedidoBistro(prod);
+                        }}
+                        className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-600 text-celestial-950 font-bold text-xs uppercase tracking-wider hover:brightness-110 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>☕ Fazer Pedido no Bistrô (Pagar no Caixa)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          carrinho.adicionarAoCarrinho(produtoModal);
+                          mostrarNotificacao('Item adicionado à sacola do bistrô!');
+                          setProdutoModal(null);
+                          setIsCarrinhoOpen(true);
+                        }}
+                        className="px-4 py-3.5 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro font-bold text-xs hover:bg-ouro/20 transition-all cursor-pointer whitespace-nowrap"
+                        title="Adicionar à sacola para pedir múltiplos itens"
+                      >
+                        + Sacola
+                      </button>
+                    </div>
                   ) : Number(produtoModal.estoque ?? 10) === 0 ? (
                     <button
                       type="button"
@@ -5736,6 +5880,294 @@ function getFrontendHtml() {
                   </div>
                 )}
 
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DE PEDIDO DO BISTRÔ: SÓ PEDIR SEM PAGAMENTO (PAGAMENTO NO CAIXA) */}
+          {/* ==================================================================== */}
+          {modalPedidoBistro && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-lg bg-celestial-900 rounded-3xl p-5 sm:p-7 space-y-4 shadow-2xl border-2 border-amber-500/60 gold-glow max-h-[92vh] overflow-y-auto">
+                <button 
+                  onClick={() => setModalPedidoBistro(null)} 
+                  className="absolute top-4 right-4 text-amber-400 hover:text-white text-2xl font-bold cursor-pointer"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                {/* Topo do Modal */}
+                <div className="text-center space-y-1.5 border-b border-ouro/25 pb-3">
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-[0.25em] flex items-center justify-center gap-1.5">
+                    <span>☕</span>
+                    <span>Bistrô &amp; Cafeteria Especial • Vênus &amp; Luar</span>
+                  </span>
+                  <h3 className="font-serif text-2xl font-bold text-amber-200">
+                    {modalPedidoBistro.ehCarrinho ? 'Confirmar Pedido do Bistrô' : 'Fazer Pedido no Bistrô'}
+                  </h3>
+                  <p className="text-xs text-luar-300">
+                    Preparo artesanal sob demanda. <strong className="text-amber-400">Pagamento diretamente no caixa.</strong>
+                  </p>
+                </div>
+
+                <form onSubmit={confirmarPedidoBistro} className="space-y-4">
+                  {/* Resumo do Item ou Itens */}
+                  {!modalPedidoBistro.ehCarrinho ? (
+                    <div className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/30 flex gap-3.5 items-center">
+                      <img src={modalPedidoBistro.imagem_url} alt={modalPedidoBistro.nome_item} className="w-16 h-16 rounded-xl object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Cafeteria Nobre</span>
+                        <h4 className="font-bold text-sm text-luar-100 truncate">{modalPedidoBistro.nome_item}</h4>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="font-serif font-bold text-base text-ouro">{formatBRL(modalPedidoBistro.preco * bistroQtd)}</span>
+                          
+                          {/* Seletor de quantidade */}
+                          <div className="flex items-center gap-2.5 bg-celestial-900 border border-ouro/30 rounded-xl px-2.5 py-1">
+                            <button 
+                              type="button" 
+                              onClick={() => setBistroQtd(Math.max(1, bistroQtd - 1))}
+                              className="text-xs text-ouro hover:text-white font-bold cursor-pointer w-4 text-center"
+                            >-</button>
+                            <span className="text-xs font-bold text-luar-100 min-w-[14px] text-center">{bistroQtd}</span>
+                            <button 
+                              type="button" 
+                              onClick={() => setBistroQtd(bistroQtd + 1)}
+                              className="text-xs text-ouro hover:text-white font-bold cursor-pointer w-4 text-center"
+                            >+</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-2xl bg-celestial-950 border border-ouro/30 space-y-2">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Itens da Comanda ({modalPedidoBistro.itens.length}):</span>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {modalPedidoBistro.itens.map(it => (
+                          <div key={it.id_produto} className="flex justify-between items-center text-xs text-luar-200 border-b border-ouro/10 pb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-ouro">{it.quantidade}x</span>
+                              <span className="truncate max-w-[200px]">{it.nome_item}</span>
+                            </div>
+                            <span className="font-serif font-bold text-ouro-light">{formatBRL(it.preco * it.quantidade)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t border-ouro/20 flex justify-between items-center">
+                        <span className="text-xs text-stone-300 font-bold">Total a pagar no caixa:</span>
+                        <span className="text-base font-serif font-bold text-ouro">
+                          {formatBRL(modalPedidoBistro.itens.reduce((acc, i) => acc + (i.preco * i.quantidade), 0))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Local de Consumo: Mesa ou Balcão */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/20 space-y-2.5">
+                    <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                      Onde deseja consumir?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        id="btn-bistro-mesa"
+                        onClick={() => setBistroLocalConsumo('Mesa')}
+                        className={'p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ' + (bistroLocalConsumo === 'Mesa' ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm' : 'bg-celestial-900 border-ouro/20 text-stone-400')}
+                      >
+                        <span>🍽️</span>
+                        <span>Mesa no Bistrô</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-bistro-balcao"
+                        onClick={() => setBistroLocalConsumo('Balcao')}
+                        className={'p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ' + (bistroLocalConsumo === 'Balcao' ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm' : 'bg-celestial-900 border-ouro/20 text-stone-400')}
+                      >
+                        <span>🛍️</span>
+                        <span>Balcão / Retirada</span>
+                      </button>
+                    </div>
+
+                    {bistroLocalConsumo === 'Mesa' && (
+                      <div className="pt-1 animate-fadeIn">
+                        <label className="block text-[10px] text-stone-400 mb-1">Número ou Identificação da Mesa *</label>
+                        <input
+                          type="text"
+                          required
+                          id="input-bistro-mesa"
+                          placeholder="Ex: Mesa 03, Mesa 07, Salão Principal..."
+                          value={bistroNumeroMesa}
+                          onChange={(e) => setBistroNumeroMesa(e.target.value)}
+                          className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 placeholder-stone-500 outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Nome do Cliente */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/20 space-y-2">
+                    <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                      Como podemos te chamar? *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      id="input-bistro-nome"
+                      placeholder="Seu nome ou apelido para o pedido"
+                      value={bistroNomeCliente}
+                      onChange={(e) => setBistroNomeCliente(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 placeholder-stone-500 outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  {/* Observações de Preparo */}
+                  <div className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/20 space-y-2">
+                    <label className="block text-[11px] font-bold text-ouro uppercase tracking-wider">
+                      Observações para o Barista (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      id="input-bistro-obs"
+                      placeholder="Ex: Leite vegetal, sem açúcar, bem quente, adoçante..."
+                      value={bistroObservacoes}
+                      onChange={(e) => setBistroObservacoes(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-celestial-900 border border-ouro/30 text-xs text-luar-100 placeholder-stone-500 outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  {/* Banner de Aviso de Pagamento no Caixa */}
+                  <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-1">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                      <span>💵</span>
+                      <span>Pagamento Direto no Caixa</span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                      Nenhum pagamento online é necessário. O pedido será encaminhado imediatamente à cozinha e o valor será pago presencialmente no caixa da boutique ao consumir ou na retirada.
+                    </p>
+                  </div>
+
+                  {/* Botão de Envio */}
+                  <button
+                    type="submit"
+                    id="btn-confirmar-pedido-bistro"
+                    disabled={enviandoPedidoBistro}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-600 text-celestial-950 font-bold text-xs uppercase tracking-widest shadow-xl hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 font-sans"
+                  >
+                    {enviandoPedidoBistro ? (
+                      <span>Enviando à Cozinha...</span>
+                    ) : (
+                      <>
+                        <span>🛎️ Enviar Pedido para o Bistrô (Pagar no Caixa)</span>
+                        <span>➔</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL DA COMANDA DIGITAL DO BISTRÔ (EMITIDA PARA CONFERÊNCIA E CAIXA) */}
+          {/* ==================================================================== */}
+          {comandaBistroModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-md bg-celestial-900 rounded-3xl p-6 sm:p-7 space-y-4 shadow-2xl border-2 border-amber-500/60 gold-glow text-center max-h-[92vh] overflow-y-auto">
+                <button 
+                  onClick={() => setComandaBistroModal(null)} 
+                  className="absolute top-4 right-4 text-ouro hover:text-white text-2xl font-bold cursor-pointer print:hidden"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                {/* Ícone e Título da Comanda */}
+                <div className="w-14 h-14 rounded-full mx-auto bg-amber-500/20 border border-amber-400 flex items-center justify-center text-2xl shadow-lg">
+                  ☕
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-[0.25em] block">Comanda Digital do Bistrô</span>
+                  <h3 className="font-serif text-2xl font-bold gold-gradient-text">
+                    Pedido Enviado à Cozinha!
+                  </h3>
+                  <p className="text-xs text-luar-300">
+                    O barista já está preparando suas delícias.
+                  </p>
+                </div>
+
+                {/* Caixa da Comanda com Número em Destaque */}
+                <div className="p-4 rounded-2xl bg-celestial-950 border border-amber-500/40 text-left space-y-3 font-mono">
+                  <div className="flex justify-between items-center border-b border-ouro/20 pb-2">
+                    <span className="text-[11px] text-stone-400">NÚMERO DA COMANDA</span>
+                    <span className="text-sm font-bold text-amber-300">#{comandaBistroModal.numero_comanda || comandaBistroModal.id_pedido}</span>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-stone-400">Cliente:</span>
+                      <span className="text-luar-100 font-bold">{comandaBistroModal.nome_cliente}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-400">Local:</span>
+                      <span className="text-amber-300 font-bold">{comandaBistroModal.local_consumo}</span>
+                    </div>
+                    {comandaBistroModal.observacoes && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-400">Obs:</span>
+                        <span className="text-luar-200 italic">{comandaBistroModal.observacoes}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Itens */}
+                  <div className="border-t border-ouro/20 pt-2 space-y-1 text-xs">
+                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold tracking-wider block">Itens Solicitados:</span>
+                    {comandaBistroModal.itens?.map((it, idx) => (
+                      <div key={idx} className="flex justify-between text-luar-100">
+                        <span>{it.quantidade}x {it.nome_item}</span>
+                        <span className="text-ouro font-bold">{formatBRL(it.preco * it.quantidade)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Total a Pagar no Caixa */}
+                  <div className="border-t border-amber-500/30 pt-2 flex justify-between items-center text-sm font-bold">
+                    <span className="text-stone-300">Total a pagar no caixa:</span>
+                    <span className="text-lg text-amber-400 font-serif">{formatBRL(comandaBistroModal.total)}</span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="pt-1 text-center">
+                    <span className="inline-block px-3 py-1 rounded-full text-[10.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      👩‍🍳 {comandaBistroModal.status || 'Em Preparo • Pagar no Caixa'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Orientação ao Cliente */}
+                <div className="p-3 rounded-xl bg-celestial-950/70 border border-ouro/20 text-[11px] text-luar-300 leading-relaxed text-left">
+                  💡 <strong className="text-ouro-light">Instrução:</strong> Guarde o número desta comanda. Ao terminar ou na retirada, dirija-se ao caixa físico e informe seu nome ou o número da comanda para realizar o pagamento.
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex gap-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex-1 py-3 rounded-xl bg-celestial-950 border border-ouro/40 text-ouro hover:bg-ouro/20 text-xs font-bold uppercase transition-all cursor-pointer"
+                  >
+                    🖨️ Imprimir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setComandaBistroModal(null)}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 text-xs font-bold uppercase tracking-wider hover:brightness-110 transition-all cursor-pointer font-sans"
+                  >
+                    OK, Entendido
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -8805,26 +9237,70 @@ function getFrontendHtml() {
                             <div key={idx} className="p-3.5 rounded-2xl bg-celestial-950/90 border border-ouro/30 hover:border-ouro/60 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs font-bold text-ouro">#{ped.numero_fatura || \`FAT-2026-\${ped.id_pedido}\`}</span>
-                                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
-                                    ✓ {ped.status || 'Faturado & Pago'}
-                                  </span>
+                                  <span className="font-mono text-xs font-bold text-ouro">#{ped.numero_comanda || ped.numero_fatura || \`FAT-2026-\${ped.id_pedido}\`}</span>
+                                  {ped.tipo_pedido === 'Bistrô' || (ped.status && ped.status.includes('Pendente no Caixa')) ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1">
+                                      <span>☕</span>
+                                      <span>{ped.status || 'Bistrô (Pendente no Caixa)'}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
+                                      ✓ {ped.status || 'Faturado & Pago'}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-xs text-luar-100 font-semibold">
                                   {ped.nome_cliente || 'Cliente Vênus e Luar'} • <span className="font-mono text-stone-400 text-[11px]">{ped.cpf_cliente || 'Consumidor'}</span>
+                                  {ped.local_consumo && (
+                                    <span className="ml-2 text-amber-400 text-[11px]">[{ped.local_consumo}]</span>
+                                  )}
                                 </div>
                                 <div className="text-[10px] text-stone-400">
                                   {new Date(ped.criado_em).toLocaleString('pt-BR')} • {ped.forma_pagamento} • {ped.itens ? ped.itens.length : 0} item(ns)
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
                                 <span className="text-base font-serif font-bold text-ouro font-mono">{formatBRL(ped.total)}</span>
+                                {ped.status && ped.status.includes('Pendente no Caixa') && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/bistro/pedidos/status', {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': 'Bearer ' + token
+                                          },
+                                          body: JSON.stringify({ id_pedido: ped.id_pedido, status: 'Pago no Caixa & Entregue' })
+                                        });
+                                        if (res.ok) {
+                                          mostrarNotificacao('Comanda #' + (ped.numero_comanda || ped.id_pedido) + ' confirmada como Paga no Caixa!');
+                                          carregarFaturamentoAdmin();
+                                        }
+                                      } catch (err) {
+                                        alert('Erro ao atualizar comanda.');
+                                      }
+                                    }}
+                                    className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10.5px] uppercase transition-all cursor-pointer shadow flex items-center gap-1 whitespace-nowrap"
+                                    title="Confirmar recebimento do valor no caixa físico"
+                                  >
+                                    <span>✓</span>
+                                    <span>Confirmar Pagamento no Caixa</span>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => setFaturaModal(ped)}
+                                  onClick={() => {
+                                    if (ped.tipo_pedido === 'Bistrô') {
+                                      setComandaBistroModal(ped);
+                                    } else {
+                                      setFaturaModal(ped);
+                                    }
+                                  }}
                                   className="py-1.5 px-3 rounded-xl bg-ouro/20 hover:bg-ouro/30 text-ouro border border-ouro/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap"
                                 >
-                                  Ver Fatura
+                                  {ped.tipo_pedido === 'Bistrô' ? 'Ver Comanda' : 'Ver Fatura'}
                                 </button>
                               </div>
                             </div>
@@ -10223,6 +10699,106 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ erro: 'Erro ao processar faturamento do pedido.' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/bistro/pedidos (PEDIDO DE CAFETERIA & BISTRÔ - SEM COBRANÇA ONLINE, PAGAMENTO DIRETO NO CAIXA)
+  if (pathname === '/api/bistro/pedidos' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id_usuario, nome_cliente, local_consumo, observacoes, itens } = JSON.parse(body);
+
+        if (!itens || !Array.isArray(itens) || itens.length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'A comanda do bistrô precisa ter ao menos um item.' }));
+          return;
+        }
+
+        const nome = (nome_cliente || 'Cliente Bistrô').trim();
+        const total = itens.reduce((acc, item) => acc + (Number(item.preco) * Number(item.quantidade)), 0);
+        const numeroComanda = `BISTRO-${1000 + pedidos.length + 1}`;
+        const chaveAutenticacao = crypto.createHash('sha256')
+          .update(`${numeroComanda}:${total}:${Date.now()}:${nome}`)
+          .digest('hex').slice(0, 32).toUpperCase();
+
+        const novoPedidoBistro = {
+          id_pedido: pedidos.length + 1001,
+          tipo_pedido: 'Bistrô',
+          numero_comanda: numeroComanda,
+          numero_fatura: numeroComanda,
+          chave_autenticacao: chaveAutenticacao,
+          id_usuario: id_usuario || null,
+          nome_cliente: nome,
+          cpf_cliente: 'Pagamento no Caixa',
+          total: Number(total.toFixed(2)),
+          itens,
+          forma_pagamento: 'Pagamento no Caixa Físico',
+          local_consumo: local_consumo || 'Balcão / Retirada',
+          observacoes: observacoes || '',
+          detalhes_pagamento: {
+            tipo: 'Acerto presencial no caixa do bistrô',
+            status_acerto: 'Pendente no caixa'
+          },
+          status: 'Em Preparo no Bistrô (Pendente no Caixa)',
+          criado_em: new Date().toISOString()
+        };
+
+        pedidos.unshift(novoPedidoBistro);
+        salvarPedidosNoDisco();
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          mensagem: 'Pedido enviado para a cozinha do Bistrô com sucesso! Pagamento no caixa.',
+          comanda: novoPedidoBistro
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao registrar pedido do bistrô.' }));
+      }
+    });
+    return;
+  }
+
+  // PUT /api/bistro/pedidos/status (ATUALIZAR STATUS DO PEDIDO DO BISTRÔ - PAGO NO CAIXA / ENTREGUE)
+  if (pathname === '/api/bistro/pedidos/status' && req.method === 'PUT') {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const payload = token ? verificarJwt(token) : null;
+    if (!payload || payload.role !== 'admin') {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ erro: 'Apenas a equipe administrativa ou caixa pode atualizar pedidos do bistrô.' }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id_pedido, status } = JSON.parse(body);
+        const pedido = pedidos.find(p => p.id_pedido === Number(id_pedido) || p.numero_comanda === id_pedido);
+        if (!pedido) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Comanda do bistrô não encontrada.' }));
+          return;
+        }
+
+        pedido.status = status || 'Pago no Caixa & Entregue';
+        if (pedido.detalhes_pagamento) {
+          pedido.detalhes_pagamento.status_acerto = 'Liquidado no caixa';
+          pedido.detalhes_pagamento.recebido_em = new Date().toISOString();
+        }
+        salvarPedidosNoDisco();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, pedido }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao processar status da comanda.' }));
       }
     });
     return;

@@ -15,6 +15,31 @@ const FiscalEngineService = require('./FiscalEngineService');
 const { getDb, transaction, queryOne, execute } = require('../../config/database');
 const sefazConfig = require('../../config/sefaz-config');
 
+// Garantir formatação oficial no Horário de Brasília (UTC-3) conforme especificação SEFAZ
+function getBrasiliaIsoString(date = new Date()) {
+  const d = new Date(date);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(d);
+  const getPart = (type) => parts.find(p => p.type === type).value;
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  let hour = getPart('hour');
+  if (hour === '24') hour = '00';
+  const minute = getPart('minute');
+  const second = getPart('second');
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`;
+}
+
 class MockFiscalProvider extends IFiscalProvider {
   constructor() {
     super();
@@ -125,7 +150,7 @@ class MockFiscalProvider extends IFiscalProvider {
         xmlContent,
         tpEmis === sefazConfig.TP_EMIS_CONTINGENCY_OFFLINE ? null : protocolNumber,
         qrCodeUrl,
-        issueDate.toISOString(),
+        getBrasiliaIsoString(issueDate),
         options.contingency_reason || null
       );
 
@@ -221,7 +246,7 @@ class MockFiscalProvider extends IFiscalProvider {
         <mod>${model}</mod>
         <serie>${series}</serie>
         <nNF>${number}</nNF>
-        <dhEmi>${issueDate.toISOString()}</dhEmi>
+        <dhEmi>${getBrasiliaIsoString(issueDate)}</dhEmi>
         <tpNF>1</tpNF>
         <idDest>1</idDest>
         <cMunFG>${company.city_code || '3205200'}</cMunFG>

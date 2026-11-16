@@ -19,6 +19,47 @@ const url = require('url');
 const emailService = require('./email-service');
 const dns = require('dns');
 
+// Garantir Fuso Horário Oficial de Brasília (UTC-3) em qualquer ambiente (inclusive Render / Nuvem)
+process.env.TZ = 'America/Sao_Paulo';
+
+// Utilitários de Data e Hora no Horário Oficial de Brasília (SEFAZ / Fiscal)
+function getBrasiliaIsoString(date = new Date()) {
+  const d = new Date(date);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(d);
+  const getPart = (type) => parts.find(p => p.type === type).value;
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  let hour = getPart('hour');
+  if (hour === '24') hour = '00';
+  const minute = getPart('minute');
+  const second = getPart('second');
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`;
+}
+
+function formatarDataHoraBrasilia(date = new Date()) {
+  const d = new Date(date);
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_venus_e_luar_2026';
 
@@ -1007,6 +1048,23 @@ function getFrontendHtml() {
     };
 
     const formatBRL = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const formatarDataHora = (val) => {
+      if (!val) return '';
+      try {
+        return new Date(val).toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch(e) {
+        return String(val);
+      }
+    };
 
     // ==========================================
     // UTILITÁRIOS UNIVERSAIS DE CPF (Limpo, Resiliente e Fluido)
@@ -6793,7 +6851,7 @@ function getFrontendHtml() {
                   <div className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
                     <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Detalhes da Transação</span>
                     <div className="text-luar-200">Forma: <strong className="text-ouro">{faturaModal.forma_pagamento}</strong></div>
-                    <div className="text-stone-300 text-[11px]">Data: {new Date(faturaModal.data_emissao || Date.now()).toLocaleString('pt-BR')}</div>
+                    <div className="text-stone-300 text-[11px]">Data: {faturaModal.data_emissao_formatada || formatarDataHora(faturaModal.data_emissao || faturaModal.criado_em || Date.now())}</div>
                   </div>
                   {faturaModal.endereco_entrega && (
                     <div className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1 sm:col-span-2">
@@ -9727,7 +9785,7 @@ function getFrontendHtml() {
                                     </span>
                                     <strong className="text-sm font-serif font-bold text-ouro-light">Interesse em {c.nome_pet}</strong>
                                   </div>
-                                  <span className="text-[10px] text-stone-400">{new Date(c.criado_em).toLocaleString('pt-BR')}</span>
+                                  <span className="text-[10px] text-stone-400">{formatarDataHora(c.criado_em)}</span>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                   <div className="p-2 rounded-lg bg-celestial-900 border border-ouro/20">
@@ -9834,7 +9892,7 @@ function getFrontendHtml() {
                                   )}
                                 </div>
                                 <div className="text-[10px] text-stone-400">
-                                  {new Date(ped.criado_em).toLocaleString('pt-BR')} • {ped.forma_pagamento} • {ped.itens ? ped.itens.length : 0} item(ns)
+                                  {formatarDataHora(ped.criado_em)} • {ped.forma_pagamento} • {ped.itens ? ped.itens.length : 0} item(ns)
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
@@ -11268,8 +11326,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             : endereco_entrega,
           status: 'Faturado & Pago',
           status_faturamento: 'Faturado',
-          faturado_em: new Date().toISOString(),
-          criado_em: new Date().toISOString()
+          faturado_em: getBrasiliaIsoString(),
+          criado_em: getBrasiliaIsoString()
         };
 
         pedidos.unshift(novoPedidoFaturado);
@@ -11285,6 +11343,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             codigo_fatura: novoPedidoFaturado.numero_fatura,
             chave_autenticacao: novoPedidoFaturado.chave_autenticacao,
             data_emissao: novoPedidoFaturado.criado_em,
+            data_emissao_formatada: formatarDataHoraBrasilia(novoPedidoFaturado.criado_em),
             cliente: {
               nome: novoPedidoFaturado.nome_cliente,
               cpf: novoPedidoFaturado.cpf_cliente
@@ -11469,7 +11528,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
         const totalFinal = Math.max(0, subtotal - descValor);
 
         const operador = nome_operador || 'Operador Caixa';
-        const dataVenda = new Date().toISOString();
+        const dataVenda = getBrasiliaIsoString();
+        const dataVendaFormatada = formatarDataHoraBrasilia(dataVenda);
         const numeroCupom = `CUPOM-PDV-${1000 + pedidos.length + 1}`;
         const chaveAutenticacao = crypto.createHash('sha256')
           .update(`${numeroCupom}:${totalFinal}:${dataVenda}:${operador}`)
@@ -11536,6 +11596,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           numero_cupom: numeroCupom,
           numero_comanda: pedidoAtualizado.numero_comanda,
           data_hora: dataVenda,
+          data_hora_formatada: dataVendaFormatada,
           operador: operador,
           cliente: pedidoAtualizado.nome_cliente,
           cpf: pedidoAtualizado.cpf_cliente,

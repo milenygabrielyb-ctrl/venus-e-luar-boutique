@@ -19,6 +19,47 @@ const path = require('path');
 const url = require('url');
 const crypto = require('crypto');
 
+// Garantir Fuso Horário Oficial de Brasília (UTC-3) em qualquer ambiente (inclusive Render / Nuvem)
+process.env.TZ = 'America/Sao_Paulo';
+
+// Utilitários de Data e Hora no Horário Oficial de Brasília (SEFAZ / Fiscal)
+function getBrasiliaIsoString(date = new Date()) {
+  const d = new Date(date);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(d);
+  const getPart = (type) => parts.find(p => p.type === type).value;
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  let hour = getPart('hour');
+  if (hour === '24') hour = '00';
+  const minute = getPart('minute');
+  const second = getPart('second');
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`;
+}
+
+function formatarDataHoraBrasilia(date = new Date()) {
+  const d = new Date(date);
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 const PORT = process.env.PORT || 3001;
 const BOUTIQUE_URL = process.env.BOUTIQUE_URL || 'http://localhost:3000';
 
@@ -265,6 +306,23 @@ function getPdvHtml() {
 
     function formatBRL(val) {
       return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function formatarDataHora(val) {
+      if (!val) return '';
+      try {
+        return new Date(val).toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch(e) {
+        return String(val);
+      }
     }
 
     function formatarCpf(cpf) {
@@ -2765,7 +2823,7 @@ function getPdvHtml() {
                                 {p.origem || p.tipo_pedido}
                               </span>
                               <span className="text-[10px] text-luar-300/70">
-                                {new Date(p.criado_em || p.data_hora).toLocaleString('pt-BR')}
+                                {formatarDataHora(p.faturado_em || p.criado_em || p.data_hora)}
                               </span>
                             </div>
 
@@ -2919,7 +2977,7 @@ function getPdvHtml() {
                     {cupomEmitido.numero_comanda && (
                       <div className="flex justify-between"><span className="font-bold">COMANDA ORIGEM:</span><span>{cupomEmitido.numero_comanda}</span></div>
                     )}
-                    <div className="flex justify-between"><span className="font-bold">DATA / HORA:</span><span>{new Date(cupomEmitido.data_hora).toLocaleString('pt-BR')}</span></div>
+                    <div className="flex justify-between"><span className="font-bold">DATA / HORA:</span><span>{cupomEmitido.data_hora_formatada || formatarDataHora(cupomEmitido.data_hora)}</span></div>
                     <div className="flex justify-between"><span className="font-bold">OPERADOR:</span><span>{cupomEmitido.operador}</span></div>
                     <div className="flex justify-between"><span className="font-bold">CLIENTE:</span><span>{cupomEmitido.cliente}</span></div>
                     <div className="flex justify-between"><span className="font-bold">CPF (PF):</span><span className="font-bold">{cupomEmitido.cpf}</span></div>
@@ -3783,7 +3841,8 @@ const server = http.createServer((req, res) => {
         const descValor = Number(desconto) || 0;
         const totalFinal = Math.max(0, subtotal - descValor);
         const operadorNome = nome_operador || 'Mileny Gabriely';
-        const dataVenda = new Date().toISOString();
+        const dataVenda = getBrasiliaIsoString();
+        const dataVendaFormatada = formatarDataHoraBrasilia(dataVenda);
         const pedidos = carregarJson(ORDERS_FILE, []);
 
         const numeroFatura = 'FAT-PDV-2026-' + (1000 + pedidos.length + 1);
@@ -4014,6 +4073,7 @@ const server = http.createServer((req, res) => {
           numero_cupom: numeroCupom,
           numero_comanda: pedidoAtualizado.numero_comanda,
           data_hora: dataVenda,
+          data_hora_formatada: dataVendaFormatada,
           operador: operadorNome,
           cliente: pedidoAtualizado.nome_cliente,
           cpf: pedidoAtualizado.cpf_cliente,

@@ -76,18 +76,26 @@ function execScript(sqlScript) {
   db.exec(sqlScript);
 }
 
+let savepointCounter = 0;
+
 /**
  * Executa uma operação dentro de uma transação com commit/rollback
+ * Suporta transações aninhadas através de SAVEPOINTs nativos do SQLite.
  */
 function transaction(fn) {
   const db = getDb();
-  db.exec('BEGIN TRANSACTION;');
+  const spName = 'sp_' + (++savepointCounter);
+  db.exec(`SAVEPOINT ${spName};`);
   try {
     const result = fn(db);
-    db.exec('COMMIT;');
+    db.exec(`RELEASE SAVEPOINT ${spName};`);
     return result;
   } catch (err) {
-    db.exec('ROLLBACK;');
+    try {
+      db.exec(`ROLLBACK TO SAVEPOINT ${spName};`);
+    } catch (rbErr) {
+      // Falha ao dar rollback secundário
+    }
     throw err;
   }
 }

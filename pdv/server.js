@@ -329,6 +329,12 @@ function getPdvHtml() {
       const [abaCat, setAbaCat] = useState('Todos');
       const [abaAtivaMobile, setAbaAtivaMobile] = useState('catalogo');
 
+      // Aba Principal do PDV: 'caixa' (Frente de Caixa 3 Colunas) | 'cadastro_inicial' (Aba de Cadastros Iniciais)
+      const [abaPrincipal, setAbaPrincipal] = useState('caixa');
+      const [subAbaCadastro, setSubAbaCadastro] = useState('clientes'); // 'clientes' | 'produtos' | 'loja'
+      const [buscaCadastroCli, setBuscaCadastroCli] = useState('');
+      const [buscaCadastroProd, setBuscaCadastroProd] = useState('');
+
       // Modais do Sistema
       const [modalEquipeAberto, setModalEquipeAberto] = useState(false);
       const [modalProdutosEstoqueAberto, setModalProdutosEstoqueAberto] = useState(false);
@@ -618,11 +624,11 @@ function getPdvHtml() {
       // =====================================================================
       // CADASTRAR NOVO CLIENTE PESSOA FÍSICA
       // =====================================================================
-      const cadastrarClientePessoaFisica = async (e) => {
-        e.preventDefault();
-        const cpfLimpo = novoCliCpf.replace(/\\D/g, '');
-        if (cpfLimpo.length !== 11) {
-          alert('O CPF é obrigatório e deve conter exatamente 11 dígitos de Pessoa Física.');
+      const cadastrarClientePessoaFisica = async (e, redirecionarParaCaixa = false) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const cpfLimpo = (novoCliCpf || '').replace(/\D/g, '');
+        if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
+          alert('O CPF é obrigatório e deve conter exatamente 11 dígitos válidos de Pessoa Física.');
           return;
         }
         if (!novoCliNome.trim()) {
@@ -638,14 +644,14 @@ function getPdvHtml() {
             body: JSON.stringify({
               nome_completo: novoCliNome.trim(),
               cpf: cpfLimpo,
-              email: novoCliEmail.trim() || (novoCliNome.trim().toLowerCase().replace(/\\s+/g, '.') + '@cliente.venus.com'),
+              email: novoCliEmail.trim() || (novoCliNome.trim().toLowerCase().replace(/\s+/g, '.') + '@cliente.venus.com'),
               telefone: novoCliTel.trim()
             })
           });
 
           const data = await res.json();
           if (res.ok && data.sucesso) {
-            avisar('Cliente ' + data.cliente.nome + ' cadastrado(a) com sucesso!');
+            avisar('✨ Cliente ' + data.cliente.nome + ' cadastrado(a) com sucesso!');
             setClienteSelecionado(data.cliente);
             setNovoCliNome('');
             setNovoCliCpf('');
@@ -653,6 +659,9 @@ function getPdvHtml() {
             setNovoCliTel('');
             setModalNovoClienteAberto(false);
             carregarDados();
+            if (redirecionarParaCaixa) {
+              setAbaPrincipal('caixa');
+            }
           } else {
             alert(data.erro || 'Erro ao cadastrar cliente.');
           }
@@ -661,6 +670,12 @@ function getPdvHtml() {
         } finally {
           setSalvandoCliente(false);
         }
+      };
+
+      const selecionarClienteVenda = (cli) => {
+        setClienteSelecionado(cli);
+        setAbaPrincipal('caixa');
+        avisar('👤 Cliente ' + (cli.nome || cli.nome_completo) + ' selecionado(a) para o caixa!');
       };
 
       // =====================================================================
@@ -791,6 +806,31 @@ function getPdvHtml() {
               </div>
             </div>
 
+            {/* SELETOR DE ABAS PRINCIPAIS DO PDV: FRENTE DE CAIXA VS CADASTRO INICIAL */}
+            <div className="flex items-center gap-1 bg-celestial-950 p-1 rounded-xl border border-ouro/40 shadow-inner">
+              <button
+                type="button"
+                id="tab-nav-frente-caixa"
+                onClick={() => setAbaPrincipal('caixa')}
+                className={"px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer " + (abaPrincipal === 'caixa' ? 'bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 shadow-md font-extrabold' : 'text-luar-200 hover:text-ouro hover:bg-celestial-900')}
+              >
+                <span>🧾</span>
+                <span>Frente de Caixa</span>
+              </button>
+              <button
+                type="button"
+                id="tab-nav-cadastro-inicial"
+                onClick={() => setAbaPrincipal('cadastro_inicial')}
+                className={"px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer " + (abaPrincipal === 'cadastro_inicial' ? 'bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 shadow-md font-extrabold' : 'text-luar-200 hover:text-ouro hover:bg-celestial-900')}
+              >
+                <span>📝</span>
+                <span>Aba de Cadastro Inicial</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                  {clientes.length}
+                </span>
+              </button>
+            </div>
+
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Botão Módulo de Produtos & Estoque */}
               <button
@@ -856,39 +896,42 @@ function getPdvHtml() {
           </header>
 
           {/* BARRA DE NAVEGAÇÃO DE ABAS PARA TELAS < 850px */}
-          <div className="pdv-mobile-nav items-center justify-between gap-1.5 px-3 py-2 bg-celestial-900 border-b border-ouro/30 shrink-0">
-            <button
-              type="button"
-              onClick={() => setAbaAtivaMobile('comandas')}
-              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'comandas' ? 'bg-amber-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-amber-300 border border-amber-500/30')}
-            >
-              <span>☕ Comandas</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-950 text-amber-200 font-extrabold">{comandas.length}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAbaAtivaMobile('catalogo')}
-              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'catalogo' ? 'bg-ouro text-celestial-950 shadow-md' : 'bg-celestial-950 text-ouro border border-ouro/30')}
-            >
-              <span>🛍️ Catálogo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAbaAtivaMobile('caixa')}
-              className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'caixa' ? 'bg-emerald-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-emerald-300 border border-emerald-500/30')}
-            >
-              <span>🧾 Caixa</span>
-              {itensCaixa.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-200 font-extrabold">
-                  {itensCaixa.reduce((acc, x) => acc + x.quantidade, 0)}
-                </span>
-              )}
-            </button>
-          </div>
+          {abaPrincipal === 'caixa' && (
+            <div className="pdv-mobile-nav items-center justify-between gap-1.5 px-3 py-2 bg-celestial-900 border-b border-ouro/30 shrink-0">
+              <button
+                type="button"
+                onClick={() => setAbaAtivaMobile('comandas')}
+                className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'comandas' ? 'bg-amber-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-amber-300 border border-amber-500/30')}
+              >
+                <span>☕ Comandas</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-950 text-amber-200 font-extrabold">{comandas.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAbaAtivaMobile('catalogo')}
+                className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'catalogo' ? 'bg-ouro text-celestial-950 shadow-md' : 'bg-celestial-950 text-ouro border border-ouro/30')}
+              >
+                <span>🛍️ Catálogo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAbaAtivaMobile('caixa')}
+                className={"flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaAtivaMobile === 'caixa' ? 'bg-emerald-500 text-celestial-950 shadow-md' : 'bg-celestial-950 text-emerald-300 border border-emerald-500/30')}
+              >
+                <span>🧾 Caixa</span>
+                {itensCaixa.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-950 text-emerald-200 font-extrabold">
+                    {itensCaixa.reduce((acc, x) => acc + x.quantidade, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
 
-          {/* CORPO DO PDV: 3 COLUNAS PROFISSIONAIS (LADO A LADO >= 850px) */}
-          <div className="pdv-main-content">
-            <div className="pdv-columns-wrapper">
+          {/* CORPO DO PDV: FRENTE DE CAIXA OU ABA DE CADASTRO INICIAL */}
+          {abaPrincipal === 'caixa' ? (
+            <div className="pdv-main-content">
+              <div className="pdv-columns-wrapper">
               
               {/* ============================================================ */}
               {/* COLUNA 1: COMANDAS DIGITAIS DO BISTRÔ (RECEPTOR DIGITAL) */}
@@ -1414,6 +1457,611 @@ function getPdvHtml() {
 
             </div>
           </div>
+          ) : (
+            /* ============================================================ */
+            /* ABA DEDICADA: CADASTRO INICIAL (CLIENTES, PRODUTOS, ESTABELECIMENTO) */
+            /* ============================================================ */
+            <div className="pdv-main-content">
+              <div className="h-full flex flex-col gap-2.5 overflow-hidden">
+                
+                {/* SUB-HEADER DA ABA DE CADASTRO INICIAL */}
+                <div className="bg-celestial-900 border border-ouro/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-ouro/30 border border-ouro/50 flex items-center justify-center text-xl shadow-inner">
+                      📝
+                    </div>
+                    <div>
+                      <h2 className="font-serif text-base font-bold gold-gradient-text tracking-wide">
+                        Módulo de Cadastro Inicial da Boutique
+                      </h2>
+                      <p className="text-xs text-luar-300/80">
+                        Cadastre clientes Pessoa Física, novos produtos e estoque inicial antes ou durante o faturamento no caixa.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* SUB-ABAS DE NAVEGAÇÃO: CLIENTES | PRODUTOS | ESTABELECIMENTO */}
+                  <div className="flex items-center gap-1.5 bg-celestial-950 p-1 rounded-xl border border-ouro/30">
+                    <button
+                      type="button"
+                      id="subtab-btn-clientes"
+                      onClick={() => setSubAbaCadastro('clientes')}
+                      className={"px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer " + (subAbaCadastro === 'clientes' ? 'bg-ouro text-celestial-950 shadow-md font-extrabold' : 'text-luar-200 hover:text-ouro')}
+                    >
+                      <span>👤</span>
+                      <span>Clientes (Pessoa Física)</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-celestial-900 text-amber-300 font-extrabold border border-amber-500/30">
+                        {clientes.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="subtab-btn-produtos"
+                      onClick={() => setSubAbaCadastro('produtos')}
+                      className={"px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer " + (subAbaCadastro === 'produtos' ? 'bg-ouro text-celestial-950 shadow-md font-extrabold' : 'text-luar-200 hover:text-ouro')}
+                    >
+                      <span>🛍️</span>
+                      <span>Produtos &amp; Estoque</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-celestial-900 text-amber-300 font-extrabold border border-amber-500/30">
+                        {produtos.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="subtab-btn-loja"
+                      onClick={() => setSubAbaCadastro('loja')}
+                      className={"px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer " + (subAbaCadastro === 'loja' ? 'bg-ouro text-celestial-950 shadow-md font-extrabold' : 'text-luar-200 hover:text-ouro')}
+                    >
+                      <span>🏢</span>
+                      <span>Dados da Loja &amp; Fiscal</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* SUB-ABA 1: CADASTRO DE CLIENTES PESSOA FÍSICA */}
+                {subAbaCadastro === 'clientes' && (
+                  <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 overflow-hidden">
+                    
+                    {/* COLUNA ESQUERDA: FORMULÁRIO DE CADASTRO INICIAL (5 colunas) */}
+                    <div className="lg:col-span-5 bg-celestial-900/90 border border-ouro/40 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto shadow-xl">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-ouro/20">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">👤</span>
+                            <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wide">
+                              Novo Cliente Pessoa Física
+                            </h3>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
+                            Exclusivo PF
+                          </span>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {/* Nome Completo */}
+                          <div>
+                            <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                              Nome Completo do Cliente *
+                            </label>
+                            <input
+                              type="text"
+                              value={novoCliNome}
+                              onChange={e => setNovoCliNome(e.target.value)}
+                              placeholder="Ex: Amanda Vasconcelos"
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                            />
+                          </div>
+
+                          {/* CPF com validação visual instantânea */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-bold text-ouro/90 block">
+                                CPF (11 dígitos) *
+                              </label>
+                              {(() => {
+                                const limpo = (novoCliCpf || '').replace(/\D/g, '');
+                                if (limpo.length === 11 && validarCpf(limpo)) {
+                                  return <span className="text-[9.5px] font-bold text-emerald-400">✓ Válido (Pessoa Física)</span>;
+                                }
+                                if (limpo.length > 0 && limpo.length < 11) {
+                                  return <span className="text-[9.5px] font-bold text-amber-400">Faltam {11 - limpo.length} dígitos</span>;
+                                }
+                                if (limpo.length === 11 && !validarCpf(limpo)) {
+                                  return <span className="text-[9.5px] font-bold text-rose-400">CPF inválido</span>;
+                                }
+                                return null;
+                              })()}
+                            </div>
+                            <input
+                              type="text"
+                              maxLength={14}
+                              value={novoCliCpf}
+                              onChange={e => setNovoCliCpf(formatarCpf(e.target.value))}
+                              placeholder="000.000.000-00"
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs font-mono text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                            />
+                          </div>
+
+                          {/* Telefone e E-mail */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                                WhatsApp / Telefone
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={15}
+                                value={novoCliTel}
+                                onChange={e => setNovoCliTel(formatarTelefone(e.target.value))}
+                                placeholder="(27) 99999-0000"
+                                className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                                E-mail
+                              </label>
+                              <input
+                                type="email"
+                                value={novoCliEmail}
+                                onChange={e => setNovoCliEmail(e.target.value)}
+                                placeholder="amanda@email.com"
+                                className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Localização da Loja */}
+                          <div className="p-2.5 rounded-xl bg-celestial-950/80 border border-ouro/20 text-[11px] text-luar-300 flex items-center justify-between">
+                            <span>📍 Município de Emissão:</span>
+                            <span className="font-bold text-ouro">Vila Velha - ES (IBGE: 3205200)</span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[10.5px] text-amber-200/90 leading-relaxed">
+                            💡 <strong>Dica da Boutique:</strong> O cadastro é unificado em tempo real. Os clientes cadastrados aqui ficam imediatamente disponíveis para busca na Frente de Caixa e no sistema do site!
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botões de Ação */}
+                      <div className="pt-3 border-t border-ouro/20 space-y-2 mt-3">
+                        <button
+                          type="button"
+                          id="btn-cadastrar-cli-tab"
+                          onClick={e => cadastrarClientePessoaFisica(e, false)}
+                          disabled={salvandoCliente}
+                          className="w-full py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-luar-100 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow border border-ouro/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          <span>💾</span>
+                          <span>{salvandoCliente ? 'Cadastrando...' : 'Salvar Cadastro do Cliente'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          id="btn-cadastrar-cli-e-vender"
+                          onClick={e => cadastrarClientePessoaFisica(e, true)}
+                          disabled={salvandoCliente}
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro hover:brightness-110 text-celestial-950 font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 active:scale-98"
+                        >
+                          <span>⚡</span>
+                          <span>Salvar e Ir para o Caixa (Iniciar Venda)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* COLUNA DIREITA: BASE DE CLIENTES CADASTRADOS (7 colunas) */}
+                    <div className="lg:col-span-7 bg-celestial-900/90 border border-ouro/30 rounded-2xl p-4 flex flex-col min-h-0 shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between pb-2 mb-3 border-b border-ouro/20 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">📋</span>
+                          <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wide">
+                            Clientes Cadastrados no Sistema
+                          </h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {clientes.length}
+                          </span>
+                        </div>
+
+                        {/* Campo de Busca de Clientes */}
+                        <div className="w-60">
+                          <input
+                            type="text"
+                            value={buscaCadastroCli}
+                            onChange={e => setBuscaCadastroCli(e.target.value)}
+                            placeholder="🔍 Buscar por nome, CPF ou e-mail..."
+                            className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-2.5 py-1 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Lista com scroll dos clientes */}
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                        {clientes.length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-luar-300/60">
+                            <span className="text-3xl mb-2">👤</span>
+                            <p className="text-xs font-semibold">Nenhum cliente cadastrado ainda.</p>
+                            <p className="text-[10px] text-luar-300/40 mt-1">Preencha o formulário ao lado para realizar o primeiro cadastro.</p>
+                          </div>
+                        ) : (
+                          clientes
+                            .filter(c => {
+                              if (!buscaCadastroCli) return true;
+                              const q = buscaCadastroCli.toLowerCase();
+                              return (c.nome || c.nome_completo || '').toLowerCase().includes(q) ||
+                                     (c.cpf || '').includes(q) ||
+                                     (c.email || '').toLowerCase().includes(q);
+                            })
+                            .map(cli => (
+                              <div
+                                key={cli.id_usuario || cli.cpf}
+                                className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20 hover:border-ouro/60 transition-all flex items-center justify-between gap-3 text-left shadow-sm"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-sm shrink-0">
+                                    👤
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-bold text-luar-100 truncate">
+                                        {cli.nome || cli.nome_completo}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                                        Pessoa Física
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-[11px] text-luar-300/70 mt-0.5 font-mono flex-wrap">
+                                      <span>CPF: {formatarCpf(cli.cpf)}</span>
+                                      {cli.telefone && <span>• {cli.telefone}</span>}
+                                      {cli.email && <span className="truncate">• {cli.email}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => selecionarClienteVenda(cli)}
+                                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro hover:brightness-110 text-celestial-950 text-xs font-bold transition-all cursor-pointer shadow flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95"
+                                  title="Selecionar este cliente e ir para a Frente de Caixa"
+                                >
+                                  <span>🛒</span>
+                                  <span>Vender</span>
+                                </button>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* SUB-ABA 2: CADASTRO DE PRODUTOS & ESTOQUE INICIAL */}
+                {subAbaCadastro === 'produtos' && (
+                  <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 overflow-hidden">
+                    
+                    {/* FORMULÁRIO DE PRODUTO (5 colunas) */}
+                    <div className="lg:col-span-5 bg-celestial-900/90 border border-ouro/40 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto shadow-xl">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-ouro/20">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🛍️</span>
+                            <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wide">
+                              Novo Produto &amp; Estoque
+                            </h3>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                            Catálogo Boutique
+                          </span>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {/* Nome do Produto */}
+                          <div>
+                            <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                              Nome do Item / Produto *
+                            </label>
+                            <input
+                              type="text"
+                              value={novoProdNome}
+                              onChange={e => setNovoProdNome(e.target.value)}
+                              placeholder="Ex: Conjunto Seda Lunar &amp; Renda"
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                            />
+                          </div>
+
+                          {/* Categoria com Regra Fiscal Automática */}
+                          <div>
+                            <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                              Categoria &amp; Particularidade Fiscal *
+                            </label>
+                            <select
+                              value={novoProdCat}
+                              onChange={e => setNovoProdCat(e.target.value)}
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 focus:outline-none focus:border-ouro"
+                            >
+                              <option value="Moda">👗 Moda Humana &amp; Íntima (Tributação Normal Simples - CSOSN 102)</option>
+                              <option value="Cosmeticos">💄 Cosméticos &amp; Higiene (Substituição Tributária - CSOSN 500 / Monofásico)</option>
+                              <option value="Pet">🐾 Universo Pet Shop (Acessórios e Rações - CSOSN 500 / 102)</option>
+                              <option value="Cafeteria">☕ Cafeteria &amp; Bistrô (Anexo I Comércio 4% - Ficha Técnica)</option>
+                            </select>
+                          </div>
+
+                          {/* Preço e Estoque Inicial */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                                Preço de Venda (R$) *
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={novoProdPreco}
+                                onChange={e => setNovoProdPreco(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs font-mono text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                                Estoque Físico Inicial *
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={novoProdEstoque}
+                                onChange={e => setNovoProdEstoque(e.target.value)}
+                                placeholder="10"
+                                className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs font-mono text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Descrição */}
+                          <div>
+                            <label className="text-[11px] font-bold text-ouro/90 block mb-1">
+                              Descrição / Detalhes
+                            </label>
+                            <input
+                              type="text"
+                              value={novoProdDesc}
+                              onChange={e => setNovoProdDesc(e.target.value)}
+                              placeholder="Ex: Peça exclusiva de corte nobre da coleção Vênus &amp; Luar."
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                            />
+                          </div>
+
+                          {/* Foto URL com Presets Rápidos */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-bold text-ouro/90 block">
+                                Foto do Produto (URL)
+                              </label>
+                              <span className="text-[9px] text-ouro/70">Opcional</span>
+                            </div>
+                            <input
+                              type="url"
+                              value={novoProdImg}
+                              onChange={e => setNovoProdImg(e.target.value)}
+                              placeholder="https://images.unsplash.com/..."
+                              className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                            />
+                            {/* Fotos Rápidas da Boutique */}
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="text-[9.5px] text-luar-300/70 font-semibold">Fotos sugeridas:</span>
+                              <button
+                                type="button"
+                                onClick={() => setNovoProdImg('https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=800&q=80')}
+                                className="px-2 py-0.5 rounded text-[9px] bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/15 cursor-pointer"
+                              >
+                                👗 Moda
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNovoProdImg('https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=800&q=80')}
+                                className="px-2 py-0.5 rounded text-[9px] bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/15 cursor-pointer"
+                              >
+                                💄 Perfume
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNovoProdImg('https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=800&q=80')}
+                                className="px-2 py-0.5 rounded text-[9px] bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/15 cursor-pointer"
+                              >
+                                🐾 Pet
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNovoProdImg('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80')}
+                                className="px-2 py-0.5 rounded text-[9px] bg-celestial-950 border border-ouro/30 text-ouro hover:bg-ouro/15 cursor-pointer"
+                              >
+                                ☕ Bistrô
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão Salvar Produto */}
+                      <div className="pt-3 border-t border-ouro/20 mt-3">
+                        <button
+                          type="button"
+                          id="btn-salvar-produto-tab"
+                          onClick={cadastrarNovoProduto}
+                          disabled={salvandoProduto}
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro hover:brightness-110 text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          <span>✨</span>
+                          <span>{salvandoProduto ? 'Cadastrando Produto...' : 'Salvar Produto no Catálogo'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LISTA DE PRODUTOS & GESTÃO RÁPIDA DE ESTOQUE (7 colunas) */}
+                    <div className="lg:col-span-7 bg-celestial-900/90 border border-ouro/30 rounded-2xl p-4 flex flex-col min-h-0 shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between pb-2 mb-3 border-b border-ouro/20 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">📦</span>
+                          <h3 className="font-serif text-sm font-bold text-amber-300 uppercase tracking-wide">
+                            Estoque Físico da Boutique
+                          </h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {produtos.length} itens
+                          </span>
+                        </div>
+
+                        {/* Campo de Busca de Produtos */}
+                        <div className="w-60">
+                          <input
+                            type="text"
+                            value={buscaCadastroProd}
+                            onChange={e => setBuscaCadastroProd(e.target.value)}
+                            placeholder="🔍 Buscar produto ou código..."
+                            className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-2.5 py-1 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Lista scrollável de itens */}
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                        {produtos
+                          .filter(p => !buscaCadastroProd || p.nome_item.toLowerCase().includes(buscaCadastroProd.toLowerCase()))
+                          .map(p => (
+                            <div
+                              key={p.id_produto}
+                              className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20 hover:border-ouro/50 transition-all flex items-center justify-between gap-3 text-left shadow-sm"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <img
+                                  src={p.imagem_url}
+                                  alt={p.nome_item}
+                                  className="w-11 h-11 rounded-lg object-cover bg-celestial-900 border border-ouro/30 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-luar-100 truncate">
+                                      {p.nome_item}
+                                    </span>
+                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      {p.categoria === 'Cafeteria' ? '☕ Bistrô' : (p.categoria === 'Moda' ? '👗 Moda' : (p.categoria === 'Pet' ? '🐾 Pet' : '💄 Cosméticos'))}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[11.5px] mt-0.5">
+                                    <span className="font-serif font-bold text-ouro">{formatBRL(p.preco)}</span>
+                                    <span className="text-luar-300/70 font-mono text-[10.5px]">
+                                      Estoque: <strong className="text-emerald-400">{p.categoria === 'Cafeteria' ? 'Sob Demanda' : (p.estoque + ' un')}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {p.categoria !== 'Cafeteria' && (
+                                  <div className="flex items-center gap-1 bg-celestial-900 border border-ouro/30 rounded-lg p-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => salvarEstoque(p.id_produto, Math.max(0, Number(p.estoque || 0) - 1), p.preco)}
+                                      className="w-6 h-6 rounded bg-stone-800 text-stone-200 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="w-8 text-center text-xs font-bold font-mono text-ouro">
+                                      {p.estoque}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => salvarEstoque(p.id_produto, Number(p.estoque || 0) + 1, p.preco)}
+                                      className="w-6 h-6 rounded bg-stone-800 text-stone-200 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    adicionarItem(p);
+                                    setAbaPrincipal('caixa');
+                                    avisar('✨ ' + p.nome_item + ' adicionado ao caixa!');
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-ouro hover:brightness-110 text-celestial-950 text-xs font-bold transition-all cursor-pointer shadow flex items-center gap-1 active:scale-95"
+                                >
+                                  <span>+ Caixa</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* SUB-ABA 3: DADOS DO ESTABELECIMENTO & CONFIGURAÇÕES FISCAIS */}
+                {subAbaCadastro === 'loja' && (
+                  <div className="flex-1 min-h-0 bg-celestial-900/90 border border-ouro/30 rounded-2xl p-5 overflow-y-auto shadow-xl text-left space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-ouro/25">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏢</span>
+                        <div>
+                          <h3 className="font-serif text-base font-bold gold-gradient-text tracking-wide">
+                            Vênus &amp; Luar Boutique Ltda • Cadastro do Estabelecimento
+                          </h3>
+                          <p className="text-xs text-luar-300/80">
+                            Parâmetros tributários oficiais registrados para faturamento com a SEFAZ-ES e emissão de NFC-e
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                        🟢 Sistema Homologado (Sandbox Fiscal Ativo)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Razão Social</span>
+                        <p className="text-xs font-bold text-luar-100">Vênus &amp; Luar Boutique Ltda</p>
+                        <p className="text-[10px] text-luar-300/60">Nome Fantasia: Vênus &amp; Luar Boutique</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Município &amp; Código IBGE</span>
+                        <p className="text-xs font-bold text-emerald-300">Vila Velha - ES</p>
+                        <p className="text-[10px] font-mono text-luar-300/60">Código IBGE Oficial: 3205200 (ES: 32)</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Regime Tributário</span>
+                        <p className="text-xs font-bold text-amber-300">Simples Nacional (CRT 1)</p>
+                        <p className="text-[10px] text-luar-300/60">LC 123/2006 • Anexo I Comércio (4%)</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Documento Fiscal Emitido</span>
+                        <p className="text-xs font-bold text-luar-100">NFC-e (Nota Fiscal de Consumidor)</p>
+                        <p className="text-[10px] font-mono text-luar-300/60">Modelo 65 • Série 1 • Cupom 80mm</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Regra de Clientes no Caixa</span>
+                        <p className="text-xs font-bold text-luar-100">Pessoa Física Obrigatório</p>
+                        <p className="text-[10px] text-luar-300/60">CPF de 11 dígitos com validação SEFAZ</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-celestial-950/80 border border-ouro/20 space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-ouro/80 tracking-wider">Terminal &amp; Operadora</span>
+                        <p className="text-xs font-bold text-ouro">#CAIXA-01 • Mileny Gabriely</p>
+                        <p className="text-[10px] text-luar-300/60">Administradora &amp; Proprietária</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          )}
 
           {/* ==================================================================== */}
           {/* MODAL 1: MÓDULO DE PRODUTOS & GESTÃO DE ESTOQUE */}

@@ -284,18 +284,29 @@ function getPdvHtml() {
     }
 
     function PdvApp() {
-      // Operador Atual (Mileny ou colaboradora)
+      // Operador Atual (Salvo ou null para exibir tela de Login/Cadastro Inicial)
       const [operador, setOperador] = useState(() => {
         const salvo = localStorage.getItem('venus_pdv_operador');
         if (salvo) {
           try { return JSON.parse(salvo); } catch(e) {}
         }
-        return {
-          id_usuario: 'usr_mileny_admin',
-          nome: 'Mileny Gabriely',
-          cargo: 'Administradora & Proprietária'
-        };
+        return null;
       });
+
+      // Aba da Tela Inicial de Autenticação do Usuário: 'login' | 'cadastro' | 'rapido'
+      const [abaLogin, setAbaLogin] = useState('login');
+      const [loginEmail, setLoginEmail] = useState('');
+      const [loginSenha, setLoginSenha] = useState('');
+      const [processandoLogin, setProcessandoLogin] = useState(false);
+
+      // Campos da Aba de Cadastro Inicial de Usuário
+      const [cadNome, setCadNome] = useState('');
+      const [cadCargo, setCadCargo] = useState('Operadora de Caixa');
+      const [cadEmail, setCadEmail] = useState('');
+      const [cadSenha, setCadSenha] = useState('');
+      const [cadConfirmarSenha, setCadConfirmarSenha] = useState('');
+      const [processandoCadastro, setProcessandoCadastro] = useState(false);
+      const [listaOperadores, setListaOperadores] = useState([]);
 
       // Dados Principais
       const [produtos, setProdutos] = useState([]);
@@ -417,6 +428,106 @@ function getPdvHtml() {
           console.error(e);
         } finally {
           setCarregandoVendas(false);
+        }
+      };
+
+      const carregarOperadores = async () => {
+        try {
+          const res = await fetch('/api/pdv/auth/operadores');
+          if (res.ok) {
+            setListaOperadores(await res.json());
+          }
+        } catch(e) {}
+      };
+
+      useEffect(() => {
+        if (!operador) {
+          carregarOperadores();
+        }
+      }, [operador]);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        if (!loginEmail.trim()) {
+          alert('Informe o seu e-mail de login.');
+          return;
+        }
+        try {
+          setProcessandoLogin(true);
+          const res = await fetch('/api/pdv/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: loginEmail, senha: loginSenha })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setOperador(data.operador);
+            localStorage.setItem('venus_pdv_operador', JSON.stringify(data.operador));
+            avisar('✨ Bem-vinda ao PDV, ' + data.operador.nome + '!');
+          } else {
+            alert(data.erro || 'Falha ao autenticar.');
+          }
+        } catch(e) {
+          alert('Erro de conexão ao realizar login.');
+        } finally {
+          setProcessandoLogin(false);
+        }
+      };
+
+      const handleCadastroUsuario = async (e) => {
+        e.preventDefault();
+        if (!cadNome.trim() || !cadEmail.trim()) {
+          alert('Preencha o nome completo e o e-mail.');
+          return;
+        }
+        if (!cadSenha || cadSenha.length < 6) {
+          alert('A senha deve conter no mínimo 6 caracteres.');
+          return;
+        }
+        if (cadSenha !== cadConfirmarSenha) {
+          alert('A confirmação da senha não confere.');
+          return;
+        }
+
+        try {
+          setProcessandoCadastro(true);
+          const res = await fetch('/api/pdv/auth/registrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: cadNome.trim(),
+              email: cadEmail.trim(),
+              senha: cadSenha,
+              cargo: cadCargo
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setOperador(data.operador);
+            localStorage.setItem('venus_pdv_operador', JSON.stringify(data.operador));
+            avisar('✨ Conta de usuário criada! Bem-vinda, ' + data.operador.nome + '!');
+          } else {
+            alert(data.erro || 'Erro ao criar conta.');
+          }
+        } catch(e) {
+          alert('Erro ao conectar com o servidor.');
+        } finally {
+          setProcessandoCadastro(false);
+        }
+      };
+
+      const handleEntrarComo = (op) => {
+        setOperador(op);
+        localStorage.setItem('venus_pdv_operador', JSON.stringify(op));
+        avisar('✨ Sessão iniciada como ' + op.nome + '!');
+      };
+
+      const handleLogout = () => {
+        if (confirm('Deseja realmente sair da sessão do caixa?')) {
+          localStorage.removeItem('venus_pdv_operador');
+          setOperador(null);
+          setAbaLogin('login');
+          avisar('🔒 Sessão encerrada.');
         }
       };
 
@@ -771,6 +882,233 @@ function getPdvHtml() {
           })
         : [];
 
+      if (!operador) {
+        return (
+          <div className="h-screen w-screen flex items-center justify-center bg-[#03060E] text-[#EAE6DF] p-4 relative overflow-hidden">
+            {/* Efeito Glow Dourado */}
+            <div className="absolute w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+
+            <div className="relative w-full max-w-md bg-celestial-900 border-2 border-ouro/50 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 text-center animate-fadeIn">
+              {/* Header com Logo Oficial */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-16 h-16 rounded-full border-2 border-ouro bg-celestial-950 p-1 shadow-xl overflow-hidden flex items-center justify-center">
+                  <img src="/logo.jpg" alt="Vênus & Luar" className="w-full h-full object-cover rounded-full" />
+                </div>
+                <h1 className="font-serif text-lg font-bold gold-gradient-text tracking-wide mt-1">
+                  Vênus &amp; Luar Boutique
+                </h1>
+                <p className="text-[11px] text-ouro/80 font-medium">
+                  Frente de Caixa &amp; PDV Profissional • #CAIXA-01
+                </p>
+              </div>
+
+              {/* Seletor de Abas: Login vs Cadastro Inicial do Usuário */}
+              <div className="flex items-center gap-1 bg-celestial-950 p-1 rounded-xl border border-ouro/30 shadow-inner">
+                <button
+                  type="button"
+                  id="tab-login-entrar"
+                  onClick={() => setAbaLogin('login')}
+                  className={"flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaLogin === 'login' ? 'bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-extrabold shadow-md' : 'text-luar-200 hover:text-ouro')}
+                >
+                  <span>🔑</span>
+                  <span>Entrar (Login)</span>
+                </button>
+                <button
+                  type="button"
+                  id="tab-login-cadastrar"
+                  onClick={() => setAbaLogin('cadastro')}
+                  className={"flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaLogin === 'cadastro' ? 'bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-extrabold shadow-md' : 'text-luar-200 hover:text-ouro')}
+                >
+                  <span>📝</span>
+                  <span>Cadastro Inicial</span>
+                </button>
+                <button
+                  type="button"
+                  id="tab-login-rapido"
+                  onClick={() => setAbaLogin('rapido')}
+                  className={"flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer " + (abaLogin === 'rapido' ? 'bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-extrabold shadow-md' : 'text-luar-200 hover:text-ouro')}
+                >
+                  <span>⚡</span>
+                  <span>Equipe</span>
+                </button>
+              </div>
+
+              {/* ABA 1: LOGIN DO USUÁRIO */}
+              {abaLogin === 'login' && (
+                <form onSubmit={handleLogin} className="space-y-3.5 text-left">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-ouro/90 block">
+                      E-mail do Usuário / Operadora *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={e => setLoginEmail(e.target.value)}
+                      placeholder="mileny@venus.com ou admin@butique.com"
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-ouro/90 block">
+                      Senha *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={loginSenha}
+                      onChange={e => setLoginSenha(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={processandoLogin}
+                    id="btn-submit-login-pdv"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-500 hover:brightness-110 text-celestial-950 font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 active:scale-98"
+                  >
+                    <span>⚡</span>
+                    <span>{processandoLogin ? 'Autenticando...' : 'Entrar no Caixa (PDV)'}</span>
+                  </button>
+
+                  <p className="text-[10px] text-center text-luar-300/60 pt-1">
+                    Não tem login ainda? Clique na aba <strong>Cadastro Inicial</strong> acima.
+                  </p>
+                </form>
+              )}
+
+              {/* ABA 2: CADASTRO INICIAL DO USUÁRIO / OPERADORA */}
+              {abaLogin === 'cadastro' && (
+                <form onSubmit={handleCadastroUsuario} className="space-y-3 text-left">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-ouro/90 block">
+                      Nome Completo do Usuário *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={cadNome}
+                      onChange={e => setCadNome(e.target.value)}
+                      placeholder="Ex: Mileny Gabriely"
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-ouro/90 block">
+                      Cargo / Função no PDV *
+                    </label>
+                    <select
+                      value={cadCargo}
+                      onChange={e => setCadCargo(e.target.value)}
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 focus:outline-none focus:border-ouro"
+                    >
+                      <option value="Administradora & Proprietária">👑 Administradora &amp; Proprietária</option>
+                      <option value="Operadora de Caixa">🧾 Operadora de Caixa</option>
+                      <option value="Vendedora & Consultora">👗 Vendedora &amp; Consultora de Moda</option>
+                      <option value="Gerente de Loja">💼 Gerente de Loja</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-ouro/90 block">
+                      E-mail de Acesso *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={cadEmail}
+                      onChange={e => setCadEmail(e.target.value)}
+                      placeholder="seuemail@butique.com"
+                      className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-ouro/90 block">
+                        Senha (min 6) *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={cadSenha}
+                        onChange={e => setCadSenha(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-ouro/90 block">
+                        Confirmar Senha *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={cadConfirmarSenha}
+                        onChange={e => setCadConfirmarSenha(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-2 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={processandoCadastro}
+                    id="btn-submit-cadastro-pdv"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-ouro to-amber-500 hover:brightness-110 text-celestial-950 font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 active:scale-98"
+                  >
+                    <span>✨</span>
+                    <span>{processandoCadastro ? 'Cadastrando...' : 'Cadastrar Usuário e Acessar PDV'}</span>
+                  </button>
+                </form>
+              )}
+
+              {/* ABA 3: SELEÇÃO RÁPIDA DE OPERADORES DA EQUIPE */}
+              {abaLogin === 'rapido' && (
+                <div className="space-y-2.5 text-left max-h-64 overflow-y-auto pr-1">
+                  <p className="text-[11px] text-ouro/80 font-semibold mb-2">
+                    Selecione uma colaboradora cadastrada para login rápido com 1 clique:
+                  </p>
+                  {listaOperadores.map(op => (
+                    <button
+                      key={op.id_usuario || op.email}
+                      type="button"
+                      onClick={() => handleEntrarComo(op)}
+                      className="w-full p-2.5 rounded-xl bg-celestial-950 border border-ouro/30 hover:border-ouro hover:bg-ouro/10 transition-all flex items-center justify-between gap-3 text-left cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xs shrink-0">
+                          👤
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-luar-100 block truncate group-hover:text-ouro">
+                            {op.nome}
+                          </span>
+                          <span className="text-[10px] text-luar-300/70 block">
+                            {op.cargo || (op.role === 'admin' ? 'Administradora' : 'Operadora')}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10.5px] font-bold shrink-0">
+                        Entrar →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="h-screen w-screen flex flex-col bg-[#03060E] text-[#EAE6DF] overflow-hidden">
           
@@ -800,9 +1138,21 @@ function getPdvHtml() {
                     {statusConexao === 'online' ? '🟢 Conectado' : '🔴 Offline'}
                   </span>
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-ouro/80 truncate">
-                  Operadora: <strong className="text-ouro">{operador.nome}</strong> • #CAIXA-01
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] sm:text-[11px] text-ouro/80 truncate">
+                    Operadora: <strong className="text-ouro">{operador?.nome}</strong> • #CAIXA-01
+                  </p>
+                  <button
+                    type="button"
+                    id="btn-trocar-operador"
+                    onClick={handleLogout}
+                    className="px-2 py-0.5 rounded-lg bg-stone-800 hover:bg-rose-950 text-stone-300 hover:text-rose-300 border border-stone-600 text-[9.5px] font-bold cursor-pointer transition-all flex items-center gap-1"
+                    title="Encerrar sessão ou trocar operadora"
+                  >
+                    <span>🚪</span>
+                    <span>Sair</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2881,6 +3231,157 @@ const server = http.createServer((req, res) => {
       res.end('Logo not found');
       return;
     }
+  }
+
+  // =========================================================================
+  // API: AUTENTICAÇÃO E CADASTRO INICIAL DE OPERADORES/USUÁRIOS DO PDV
+  // =========================================================================
+
+  // GET /api/pdv/auth/operadores (Lista colaboradores/operadores disponíveis)
+  if (pathname === '/api/pdv/auth/operadores' && req.method === 'GET') {
+    const usuarios = carregarJson(USERS_FILE, []);
+    const operadores = usuarios
+      .filter(u => u.role === 'admin' || u.cargo || u.permissoes)
+      .map(u => ({
+        id_usuario: u.id_usuario,
+        nome: u.nome_completo || u.nome,
+        email: u.email,
+        cargo: u.cargo || (u.role === 'admin' ? 'Administradora & Proprietária' : 'Operadora de Caixa'),
+        role: u.role || 'colaborador'
+      }));
+
+    if (!operadores.some(o => (o.email && o.email.includes('mileny')) || (o.nome && o.nome.includes('Mileny')))) {
+      operadores.unshift({
+        id_usuario: 'usr_mileny_admin',
+        nome: 'Mileny Gabriely',
+        email: 'mileny@venus.com',
+        cargo: 'Administradora & Proprietária',
+        role: 'admin'
+      });
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(operadores));
+    return;
+  }
+
+  // POST /api/pdv/auth/login
+  if (pathname === '/api/pdv/auth/login' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { email, senha } = JSON.parse(body);
+        const emailNorm = (email || '').trim().toLowerCase();
+        const usuarios = carregarJson(USERS_FILE, []);
+        let usuarioEncontrado = usuarios.find(u => u.email && u.email.toLowerCase() === emailNorm);
+
+        if (!usuarioEncontrado && (emailNorm === 'mileny@venus.com' || emailNorm.includes('mileny'))) {
+          usuarioEncontrado = {
+            id_usuario: 'usr_mileny_admin',
+            nome: 'Mileny Gabriely',
+            email: 'mileny@venus.com',
+            cargo: 'Administradora & Proprietária',
+            role: 'admin'
+          };
+        }
+
+        if (!usuarioEncontrado) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Usuário não encontrado. Verifique o e-mail ou faça o Cadastro Inicial na aba ao lado.' }));
+          return;
+        }
+
+        const operadorLogado = {
+          id_usuario: usuarioEncontrado.id_usuario,
+          nome: usuarioEncontrado.nome_completo || usuarioEncontrado.nome,
+          email: usuarioEncontrado.email,
+          cargo: usuarioEncontrado.cargo || (usuarioEncontrado.role === 'admin' ? 'Administradora & Proprietária' : 'Operadora de Caixa'),
+          role: usuarioEncontrado.role || 'colaborador'
+        };
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, operador: operadorLogado }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao processar login no PDV.' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/pdv/auth/registrar (Cadastro Inicial de Usuário / Operador no PDV)
+  if (pathname === '/api/pdv/auth/registrar' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { nome, email, senha, cargo } = JSON.parse(body);
+        if (!nome || !nome.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Informe o nome completo do usuário.' }));
+          return;
+        }
+        if (!email || !email.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Informe um e-mail válido.' }));
+          return;
+        }
+        if (!senha || senha.length < 6) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'A senha deve conter no mínimo 6 caracteres.' }));
+          return;
+        }
+
+        const emailNorm = email.trim().toLowerCase();
+        const usuarios = carregarJson(USERS_FILE, []);
+        if (usuarios.some(u => u.email && u.email.toLowerCase() === emailNorm)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Este e-mail já está cadastrado. Entre pela aba Login.' }));
+          return;
+        }
+
+        const novoOp = {
+          id_usuario: 'usr_pdv_' + Date.now(),
+          nome_completo: nome.trim(),
+          nome: nome.trim(),
+          email: emailNorm,
+          cargo: cargo || 'Operadora de Caixa',
+          role: (cargo && cargo.includes('Admin')) ? 'admin' : 'colaborador',
+          permissoes: { pdv: true, estoque: true, produtos: true, faturamento: true },
+          senha_hash: 'simulada:' + Date.now(),
+          criado_em: new Date().toISOString()
+        };
+
+        usuarios.push(novoOp);
+        salvarJson(USERS_FILE, usuarios);
+
+        try {
+          const db = getDb();
+          db.prepare(`
+            INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(novoOp.id_usuario, novoOp.nome_completo, novoOp.email, novoOp.senha_hash, novoOp.role);
+        } catch(e) {}
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          sucesso: true,
+          mensagem: 'Usuário cadastrado com sucesso!',
+          operador: {
+            id_usuario: novoOp.id_usuario,
+            nome: novoOp.nome_completo,
+            email: novoOp.email,
+            cargo: novoOp.cargo,
+            role: novoOp.role
+          }
+        }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao cadastrar novo operador.' }));
+      }
+    });
+    return;
   }
 
   // =========================================================================

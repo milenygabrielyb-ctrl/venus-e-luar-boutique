@@ -88,6 +88,9 @@ function getPdvHtml() {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Vênus & Luar • Frente de Caixa & PDV Profissional</title>
   <link rel="icon" type="image/jpeg" href="/logo.jpg" />
   <!-- Tailwind CSS -->
@@ -759,8 +762,19 @@ function getPdvHtml() {
           {/* TOPO: BARRA DE OPERAÇÃO PROFISSIONAL */}
           <header className="bg-celestial-900 border-b border-ouro/30 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-lg shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full border border-ouro/60 bg-celestial-950 p-0.5 flex items-center justify-center shadow-md shrink-0">
-                <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover rounded-full" />
+              <div className="w-9 h-9 rounded-full border border-ouro/60 bg-celestial-950 p-0.5 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
+                <img
+                  src="/logo.jpg"
+                  alt="Vênus & Luar"
+                  className="w-full h-full object-cover rounded-full"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="w-full h-full rounded-full bg-celestial-900 border border-ouro/40 items-center justify-center text-ouro text-xs hidden">
+                  🌙
+                </div>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -2195,9 +2209,14 @@ const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
 
-  // Servir SPA do PDV
+  // Servir SPA do PDV (com cabeçalhos rigorosos para evitar cache de versões antigas)
   if (pathname === '/' || pathname === '/index.html' || pathname === '/pdv') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     res.end(getPdvHtml());
     return;
   }

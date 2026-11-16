@@ -5,10 +5,11 @@
   "main": "app-server.js",
   "scripts": {
     "start": "node app-server.js",
+    "start:pdv": "node pdv/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.5.0"
   },
   "keywords": [],
   "author": "",

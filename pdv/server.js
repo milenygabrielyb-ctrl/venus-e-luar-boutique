@@ -326,7 +326,7 @@ function getPdvHtml() {
     }
 
     function formatarCpf(cpf) {
-      const d = (cpf || '').replace(/\\D/g, '').slice(0, 11);
+      const d = (cpf || '').replace(/[^0-9]/g, '').slice(0, 11);
       if (d.length <= 3) return d;
       if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
       if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
@@ -334,11 +334,19 @@ function getPdvHtml() {
     }
 
     function formatarTelefone(tel) {
-      const d = (tel || '').replace(/\\D/g, '').slice(0, 11);
+      const d = (tel || '').replace(/[^0-9]/g, '').slice(0, 11);
       if (d.length <= 2) return d;
       if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
       if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
       return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+    }
+
+    function validarCpf(cpf) {
+      if (!cpf) return false;
+      const limpo = String(cpf).replace(/[^0-9]/g, '');
+      if (limpo.length !== 11) return false;
+      if (limpo.split('').every(c => c === limpo[0])) return false;
+      return true;
     }
 
     function PdvApp() {
@@ -685,8 +693,8 @@ function getPdvHtml() {
         setAbaAtivaMobile('caixa');
 
         // Tentar localizar cliente na base se houver nome ou CPF
-        if (cmd.cpf_cliente && cmd.cpf_cliente !== 'Pagamento no Caixa' && cmd.cpf_cliente.replace(/\\D/g, '').length === 11) {
-          const cliExistente = clientes.find(c => c.cpf && c.cpf.replace(/\\D/g, '') === cmd.cpf_cliente.replace(/\\D/g, ''));
+        if (cmd.cpf_cliente && cmd.cpf_cliente !== 'Pagamento no Caixa' && cmd.cpf_cliente.replace(/[^0-9]/g, '').length === 11) {
+          const cliExistente = clientes.find(c => c.cpf && c.cpf.replace(/[^0-9]/g, '') === cmd.cpf_cliente.replace(/[^0-9]/g, ''));
           if (cliExistente) {
             setClienteSelecionado(cliExistente);
           } else {
@@ -730,7 +738,7 @@ function getPdvHtml() {
       // =====================================================================
       const faturarPedidoPdv = async () => {
         // Validação Estrita do Passo 1: Cliente Pessoa Física Obrigatório
-        if (!clienteSelecionado || !clienteSelecionado.cpf || clienteSelecionado.cpf.replace(/\\D/g, '').length !== 11) {
+        if (!clienteSelecionado || !clienteSelecionado.cpf || clienteSelecionado.cpf.replace(/[^0-9]/g, '').length !== 11) {
           avisar('⚠️ PASSO 1: Selecione ou cadastre o Cliente com CPF válido (11 dígitos).');
           return;
         }
@@ -795,7 +803,7 @@ function getPdvHtml() {
       // =====================================================================
       const cadastrarClientePessoaFisica = async (e, redirecionarParaCaixa = false) => {
         if (e && e.preventDefault) e.preventDefault();
-        const cpfLimpo = (novoCliCpf || '').replace(/\D/g, '');
+        const cpfLimpo = (novoCliCpf || '').replace(/[^0-9]/g, '');
         if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
           alert('O CPF é obrigatório e deve conter exatamente 11 dígitos válidos de Pessoa Física.');
           return;
@@ -931,11 +939,11 @@ function getPdvHtml() {
       // Clientes filtrados na busca inteligente (busca instantânea por Nome, E-mail ou CPF)
       const clientesFiltrados = buscaCliente.trim()
         ? clientes.filter(c => {
-            const bCpf = buscaCliente.toLowerCase().replace(/\\D/g, '');
+            const bCpf = buscaCliente.toLowerCase().replace(/[^0-9]/g, '');
             const bTexto = buscaCliente.toLowerCase().trim();
             const matchNome = (c.nome || c.nome_completo || '').toLowerCase().includes(bTexto);
             const matchEmail = (c.email || '').toLowerCase().includes(bTexto);
-            const matchCpf = bCpf.length > 0 && (c.cpf || '').replace(/\\D/g, '').includes(bCpf);
+            const matchCpf = bCpf.length > 0 && (c.cpf || '').replace(/[^0-9]/g, '').includes(bCpf);
             return matchNome || matchEmail || matchCpf;
           })
         : [];
@@ -1567,7 +1575,7 @@ function getPdvHtml() {
                     {clienteSelecionado ? (
                       /* Card do Cliente Selecionado */
                       (() => {
-                        const cpfLimpo = (clienteSelecionado.cpf || '').replace(/\\D/g, '');
+                        const cpfLimpo = (clienteSelecionado.cpf || '').replace(/[^0-9]/g, '');
                         const cpfValido = cpfLimpo.length === 11;
                         return (
                           <div className={"p-2 rounded-lg border flex flex-col gap-1.5 animate-fadeIn " + (cpfValido ? 'bg-emerald-950/40 border-emerald-500/40' : 'bg-amber-950/40 border-amber-500/50')}>
@@ -1661,7 +1669,14 @@ function getPdvHtml() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setNovoCliNome(buscaCliente);
+                                    const limpo = buscaCliente.replace(/[^0-9]/g, '');
+                                    if (limpo.length >= 9) {
+                                      setNovoCliCpf(formatarCpf(buscaCliente));
+                                      setNovoCliNome('');
+                                    } else {
+                                      setNovoCliNome(buscaCliente);
+                                      setNovoCliCpf('');
+                                    }
                                     setModalNovoClienteAberto(true);
                                     setMostrarSugestoesCliente(false);
                                   }}
@@ -1794,7 +1809,7 @@ function getPdvHtml() {
                         <button
                           key={fp.id}
                           type="button"
-                          id={'btn-fp-' + fp.id.replace(/\\s+/g, '')}
+                          id={'btn-fp-' + fp.id.replace(/ /g, '')}
                           onClick={() => setFormaPagamento(fp.id)}
                           className={"py-1 px-1 rounded-lg text-[9.5px] font-bold flex flex-col items-center justify-center transition-all cursor-pointer " + (formaPagamento === fp.id ? 'bg-ouro text-celestial-950 ring-2 ring-ouro-light shadow-md' : 'bg-celestial-900 border border-ouro/30 text-luar-200 hover:text-ouro')}
                         >
@@ -1969,7 +1984,7 @@ function getPdvHtml() {
                                 CPF (11 dígitos) *
                               </label>
                               {(() => {
-                                const limpo = (novoCliCpf || '').replace(/\D/g, '');
+                                const limpo = (novoCliCpf || '').replace(/[^0-9]/g, '');
                                 if (limpo.length === 11 && validarCpf(limpo)) {
                                   return <span className="text-[9.5px] font-bold text-emerald-400">✓ Válido (Pessoa Física)</span>;
                                 }
@@ -2990,7 +3005,7 @@ function getPdvHtml() {
                     <div className="bg-amber-50 border border-amber-600/30 p-2 rounded-xl text-left space-y-1">
                       <div className="text-[9px] font-bold text-amber-950">CHAVE DE ACESSO OFICIAL SEFAZ-ES (44 DÍGITOS):</div>
                       <div className="font-mono text-[8.5px] text-stone-900 tracking-wider break-all bg-white p-1 rounded border border-stone-300 select-all">
-                        {cupomEmitido.chave_acesso_44.replace(/(\d{4})/g, '$1 ').trim()}
+                        {(cupomEmitido.chave_acesso_44.match(/.{1,4}/g) || []).join(' ')}
                       </div>
                       {cupomEmitido.protocolo_autorizacao && (
                         <div className="text-[8.5px] text-stone-700 flex justify-between pt-0.5">

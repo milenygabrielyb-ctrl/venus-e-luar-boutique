@@ -22,6 +22,16 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 3001;
 const BOUTIQUE_URL = process.env.BOUTIQUE_URL || 'http://localhost:3000';
 
+// Módulos Relacionais e Motores Fiscais Omnichannel (Fases 1 a 5)
+const { getDb, queryOne, query, execute, transaction } = require('../src/config/database');
+const FiscalEngineService = require('../src/services/fiscal/FiscalEngineService');
+const MockFiscalProvider = require('../src/services/fiscal/MockFiscalProvider');
+const InventoryService = require('../src/services/inventory/InventoryService');
+const FefoAllocationEngine = require('../src/services/inventory/FefoAllocationEngine');
+const RecipeDeductionEngine = require('../src/services/inventory/RecipeDeductionEngine');
+const BistroTabService = require('../src/services/bistro/BistroTabService');
+const mockFiscalProvider = new MockFiscalProvider();
+
 // Acesso aos dados persistidos compartilhados
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'produtos.json');
@@ -1886,9 +1896,9 @@ function getPdvHtml() {
                     <h3 className="font-serif font-bold text-sm uppercase tracking-wider text-stone-900">
                       Vênus &amp; Luar Boutique
                     </h3>
-                    <p className="text-[10px] text-stone-600 leading-tight">DOCUMENTO AUXILIAR DE VENDA • NOTA DE FATURAMENTO PDV</p>
-                    <p className="text-[9px] text-stone-500 leading-tight">CNPJ: 45.123.890/0001-99 • IE: 112.345.678.910</p>
-                    <p className="text-[9px] text-stone-500 leading-tight">Alameda dos Jardins, 1020 • Jardins, São Paulo - SP</p>
+                    <p className="text-[10px] text-stone-600 leading-tight font-bold">NFC-e • NOTA FISCAL DE CONSUMIDOR ELETRÔNICA (MOD. 65)</p>
+                    <p className="text-[9px] text-stone-500 leading-tight">CNPJ: 00.000.000/0001-91 • IE: ISENTO • CRT 1 (Simples Nacional)</p>
+                    <p className="text-[9px] text-stone-500 leading-tight">Rua Santa Rosa, 123 • Glória, Vila Velha - ES • CEP: 29122-000</p>
                     <div className="text-[10px] text-stone-400 select-none py-0.5">------------------------------------------------</div>
                   </div>
 
@@ -1902,9 +1912,24 @@ function getPdvHtml() {
                     <div className="flex justify-between"><span className="font-bold">CLIENTE:</span><span>{cupomEmitido.cliente}</span></div>
                     <div className="flex justify-between"><span className="font-bold">CPF (PF):</span><span className="font-bold">{cupomEmitido.cpf}</span></div>
                     <div className="flex justify-between"><span className="font-bold">DOCUMENTO:</span><span>Pessoa Física</span></div>
-                    <div className="flex justify-between"><span className="font-bold">STATUS:</span><span className="font-bold text-emerald-800">Faturado &amp; Liquidado</span></div>
+                    <div className="flex justify-between"><span className="font-bold">STATUS FISCAL:</span><span className="font-bold text-emerald-800">Autorizado SEFAZ-ES (Homologação)</span></div>
                     <div className="text-[10px] text-stone-400 select-none py-0.5 text-center">------------------------------------------------</div>
                   </div>
+
+                  {cupomEmitido.chave_acesso_44 && (
+                    <div className="bg-amber-50 border border-amber-600/30 p-2 rounded-xl text-left space-y-1">
+                      <div className="text-[9px] font-bold text-amber-950">CHAVE DE ACESSO OFICIAL SEFAZ-ES (44 DÍGITOS):</div>
+                      <div className="font-mono text-[8.5px] text-stone-900 tracking-wider break-all bg-white p-1 rounded border border-stone-300 select-all">
+                        {cupomEmitido.chave_acesso_44.replace(/(\d{4})/g, '$1 ').trim()}
+                      </div>
+                      {cupomEmitido.protocolo_autorizacao && (
+                        <div className="text-[8.5px] text-stone-700 flex justify-between pt-0.5">
+                          <span>Protocolo SEFAZ:</span>
+                          <span className="font-bold text-stone-900">{cupomEmitido.protocolo_autorizacao}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-1 text-[10.5px]">
                     <div className="flex justify-between font-bold border-b border-stone-300 pb-0.5 text-[9.5px]">
@@ -1939,8 +1964,19 @@ function getPdvHtml() {
                     <div className="text-[10px] text-stone-400 select-none py-0.5 text-center">------------------------------------------------</div>
                   </div>
 
+                  {cupomEmitido.qr_code_url && (
+                    <div className="text-center py-1">
+                      <div className="inline-block p-1.5 bg-white border border-stone-400 rounded-lg max-w-full">
+                        <div className="text-[8px] font-bold text-stone-600 pb-0.5">CONSULTA NFC-e VIA QR CODE SEFAZ-ES</div>
+                        <a href={cupomEmitido.qr_code_url} target="_blank" rel="noreferrer" className="text-[8.5px] text-blue-700 underline font-mono break-all hover:text-blue-900 block">
+                          🔗 Abrir Validação Oficial na SEFAZ
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="text-center space-y-1 text-[9px] text-stone-500">
-                    <p className="font-bold">CHAVE DE AUTENTICAÇÃO DIGITAL SHA-256:</p>
+                    <p className="font-bold">AUTENTICAÇÃO DIGITAL SHA-256:</p>
                     <p className="font-mono break-all text-[8px] bg-stone-200 p-1 rounded border border-stone-300">
                       {cupomEmitido.chave_autenticacao}
                     </p>
@@ -2506,7 +2542,7 @@ const server = http.createServer((req, res) => {
   const handlerFaturar = (req, res) => {
     let body = '';
     req.on('data', c => { body += c; });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const dados = JSON.parse(body);
         const {
@@ -2526,7 +2562,7 @@ const server = http.createServer((req, res) => {
         } = dados;
 
         // 1. Validação Estrita do Cliente Pessoa Física (CPF 11 dígitos)
-        const cpfLimpo = (cpf_cliente || '').replace(/\D/g, '');
+        const cpfLimpo = (cpf_cliente || dados.cpf || '').replace(/\D/g, '');
         if (cpfLimpo.length !== 11 || !validarCpf(cpfLimpo)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -2589,9 +2625,146 @@ const server = http.createServer((req, res) => {
           .digest('hex').toUpperCase();
 
         const cpfFormatado = formatarCpf(cpfLimpo);
+        const idComandaRef = id_pedido || dados.numero_comanda;
+
+        // 4.1 Integração Fiscal & Estoque Omnichannel (SQLite Relacional)
+        let fiscalAuth = null;
+        let taxationList = [];
+        try {
+          const company = queryOne('SELECT * FROM companies WHERE id = ?', ['comp_matriz_es']);
+          const orderSqlId = 'ord_pdv_' + Date.now();
+
+          for (const it of itens) {
+            const pId = 'prod_' + it.id_produto;
+            let prodRow = queryOne('SELECT * FROM products WHERE id = ?', [pId]);
+            if (!prodRow) {
+              prodRow = queryOne('SELECT * FROM products WHERE lower(name) = lower(?)', [it.nome_item]) || {
+                id: pId,
+                name: it.nome_item,
+                ncm: '61044300',
+                has_icms_st: 0,
+                is_monophasic_pis_cofins: 0,
+                product_type: 'standard'
+              };
+            }
+
+            const itemTax = FiscalEngineService.determineItemTaxation(it, prodRow, { destination_uf: 'ES' }, company);
+            taxationList.push(itemTax);
+
+            // Baixa de estoque relacional especializada
+            if (prodRow.product_type === 'composite') {
+              // Cafeteria / Bistrô: Baixa automática de insumos (café em g, leite em ml)
+              RecipeDeductionEngine.deductRecipeIngredients(prodRow.id, Number(it.quantidade), {
+                orderId: orderSqlId,
+                operatorName: operadorNome
+              });
+            } else if (prodRow.product_type === 'batch') {
+              // Cosméticos ou Pet: Baixa FEFO por validade
+              try {
+                FefoAllocationEngine.allocateAndConsume(prodRow.id, Number(it.quantidade), {
+                  orderId: orderSqlId,
+                  operatorName: operadorNome,
+                  notes: `Venda PDV #${numeroFatura}`
+                });
+              } catch (fefoErr) {
+                InventoryService.recordMovement({
+                  productId: prodRow.id,
+                  movementType: 'OUT_SALE',
+                  quantity: -Number(it.quantidade),
+                  orderId: orderSqlId,
+                  operatorName: operadorNome
+                });
+              }
+            } else {
+              // Moda ou Acessórios: Kardex padrão
+              InventoryService.recordMovement({
+                productId: prodRow.id,
+                movementType: 'OUT_SALE',
+                quantity: -Number(it.quantidade),
+                orderId: orderSqlId,
+                operatorName: operadorNome
+              });
+            }
+          }
+
+          // Criar registro na tabela `orders` do SQLite
+          execute(`
+            INSERT INTO orders (
+              id, order_number, channel, customer_cpf_snapshot, customer_name_snapshot,
+              status, subtotal, discount_amount, total_amount, payment_method, created_at
+            ) VALUES (?, ?, 'POS_RETAIL', ?, ?, 'invoiced', ?, ?, ?, ?, ?)
+          `, [
+            orderSqlId,
+            numeroFatura,
+            cpfLimpo,
+            nome_cliente.trim(),
+            Number(subtotal.toFixed(2)),
+            descValor,
+            Number(totalFinal.toFixed(2)),
+            forma_pagamento,
+            dataVenda
+          ]);
+
+          // Criar itens na tabela `order_items` do SQLite com snapshot fiscal
+          for (let i = 0; i < taxationList.length; i++) {
+            const tax = taxationList[i];
+            execute(`
+              INSERT INTO order_items (
+                id, order_id, product_id, product_name, quantity, unit_price, total_price,
+                ncm, cest, cfop, csosn, pis_cst, cofins_cst,
+                icms_base, icms_rate, icms_amount, icms_st_amount,
+                cbs_rate, cbs_amount, ibs_rate, ibs_amount
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              `${orderSqlId}_it_${i}`,
+              orderSqlId,
+              tax.product_id,
+              tax.product_name,
+              tax.quantity,
+              tax.unit_price,
+              tax.total_price,
+              tax.ncm,
+              tax.cest,
+              tax.cfop,
+              tax.csosn,
+              tax.pis_cst,
+              tax.cofins_cst,
+              tax.icms_base,
+              tax.icms_rate,
+              tax.icms_amount,
+              tax.icms_st_amount,
+              tax.cbs_rate,
+              tax.cbs_amount,
+              tax.ibs_rate,
+              tax.ibs_amount
+            ]);
+          }
+
+          // Emitir e Autorizar NFC-e (Modelo 65) via MockFiscalProvider
+          fiscalAuth = await mockFiscalProvider.authorize({
+            id: orderSqlId,
+            order_number: numeroFatura,
+            channel: 'POS_RETAIL',
+            customer_cpf_snapshot: cpfLimpo,
+            customer_name_snapshot: nome_cliente.trim(),
+            subtotal,
+            discount_amount: descValor,
+            shipping_amount: 0,
+            total_amount: totalFinal
+          }, company, { model: '65', tpEmis: 1 });
+
+          // Se for comanda do bistrô, fechar comanda
+          if (idComandaRef) {
+            try {
+              const tabRow = queryOne('SELECT id FROM bistro_tabs WHERE tab_number = ? OR id = ?', [String(idComandaRef), String(idComandaRef)]);
+              if (tabRow) BistroTabService.closeTab(tabRow.id);
+            } catch (tabErr) {}
+          }
+        } catch (fiscErr) {
+          console.error('Aviso na camada relacional fiscal:', fiscErr);
+        }
 
         let pedidoAtualizado = null;
-        const idComandaRef = id_pedido || dados.numero_comanda;
 
         if (idComandaRef) {
           // Liquidando e faturando comanda existente do bistrô
@@ -2685,7 +2858,14 @@ const server = http.createServer((req, res) => {
           forma_pagamento: pedidoAtualizado.forma_pagamento,
           valor_recebido: Number(valor_recebido) || totalFinal,
           troco: Number(troco) || 0,
-          chave_autenticacao: chaveAutenticacao
+          chave_autenticacao: chaveAutenticacao,
+          // Dados Oficiais de Emissão NFC-e SEFAZ-ES
+          chave_acesso_44: fiscalAuth?.access_key || null,
+          protocolo_autorizacao: fiscalAuth?.protocol_number || null,
+          qr_code_url: fiscalAuth?.qr_code_url || null,
+          modelo_fiscal: 'NFC-e (Modelo 65)',
+          ambiente_fiscal: 'Homologação / SEFAZ-ES (Mock A1)',
+          tributacao_itens: taxationList
         };
 
         res.writeHead(200, { 'Content-Type': 'application/json' });

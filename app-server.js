@@ -11203,6 +11203,19 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           }
         }
 
+        // Regra de Bloqueio de Canal Omnichannel (allow_ecommerce):
+        // Itens preparados/perecíveis da Cafeteria/Bistrô estão disponíveis apenas para consumo local no PDV
+        for (const it of itens) {
+          const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));
+          if (prodNoBanco && (prodNoBanco.categoria === 'Cafeteria' || prodNoBanco.categoria === 'Bistrô')) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              erro: `O item "${prodNoBanco.nome_item}" faz parte da nossa Cafeteria/Bistrô e está disponível exclusivamente para consumo presencial em nossa loja física em Vila Velha. Por favor, remova-o da sacola para prosseguir com a entrega online dos produtos da boutique.`
+            }));
+            return;
+          }
+        }
+
         // Verificação estrita de estoque antes de emitir a fatura (apenas Moda e Pet; Cafeteria é sob demanda)
         for (const it of itens) {
           const prodNoBanco = produtos.find(p => p.id_produto === Number(it.id_produto));

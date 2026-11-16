@@ -35,3 +35,9 @@ public/uploads/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# SQLite temporários e XMLs locais
+storage/*.sqlite-shm
+storage/*.sqlite-wal
+storage/xml/*
+!storage/xml/.gitkeep

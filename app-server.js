@@ -6919,6 +6919,23 @@ function getFrontendHtml() {
                   </button>
                   <button
                     type="button"
+                    id="btn-whatsapp-fatura-site"
+                    onClick={() => {
+                      const tel = (faturaModal.cliente?.telefone || faturaModal.telefone_cliente || prompt('Informe o WhatsApp do cliente com DDD (apenas números):', '')) || '';
+                      const telLimpo = tel.replace(/[^0-9]/g, '');
+                      if (!telLimpo) return;
+                      const dddTel = telLimpo.length <= 11 ? (telLimpo.startsWith('55') ? telLimpo : '55' + telLimpo) : telLimpo;
+                      const itensTxt = (faturaModal.itens || []).map(it => '• ' + (it.quantidade || 1) + 'x ' + (it.nome || it.titulo || 'Produto') + ' - R$ ' + (((it.preco || it.preco_unitario || 0) * (it.quantidade || 1)).toFixed(2))).join('\n');
+                      const msg = '✨ *VÊNUS & LUAR BOUTIQUE* ✨\n🧾 *Fatura Confirmada:* #' + faturaModal.numero_fatura + '\n📅 *Data:* ' + (faturaModal.data_emissao_formatada || formatarDataHora(faturaModal.data_emissao || faturaModal.criado_em || Date.now())) + '\n👤 *Cliente:* ' + (faturaModal.cliente?.nome || faturaModal.nome_cliente || 'Consumidor') + '\n━━━━━━━━━━━━━━━━━━━━\n🛍️ *ITENS COMPRADOS:*\n' + itensTxt + '\n━━━━━━━━━━━━━━━━━━━━\n💳 *Pagamento:* ' + faturaModal.forma_pagamento + '\n💰 *Total:* R$ ' + Number(faturaModal.total || 0).toFixed(2) + '\n🔐 *Autenticação:* ' + (faturaModal.chave_autenticacao || '').substring(0, 24) + '...\n\n_Agradecemos sua preferência. Vênus & Luar Haute Couture._';
+                      window.open('https://wa.me/' + dddTel + '?text=' + encodeURIComponent(msg), '_blank');
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/50 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <span>📲</span>
+                    <span>Enviar no WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setFaturaModal(null)}
                     className="flex-1 py-3 rounded-xl bg-gradient-to-r from-ouro-dark to-ouro text-celestial-950 font-bold text-xs uppercase tracking-wider shadow-md hover:brightness-110 transition-all cursor-pointer"
                   >
@@ -10217,9 +10234,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Redirecionamento da rota /pdv para o Sistema Independente de PDV Frente de Caixa (Porta 3001)
+  // Redirecionamento da rota /pdv para o Sistema Independente de PDV Frente de Caixa (Porta 3001 ou Cloud Render)
   if (pathname === '/pdv') {
-    res.writeHead(302, { 'Location': 'http://localhost:3001' });
+    const targetPdvUrl = process.env.PDV_URL || 'http://localhost:3001';
+    res.writeHead(302, { 'Location': targetPdvUrl });
     res.end();
     return;
   }

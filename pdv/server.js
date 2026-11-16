@@ -78,6 +78,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'produtos.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'pedidos.json');
 const USERS_FILE = path.join(DATA_DIR, 'usuarios.json');
+const CAIXA_FILE = path.join(DATA_DIR, 'caixa_turnos.json');
 
 function carregarJson(arquivo, fallback) {
   try {
@@ -96,6 +97,17 @@ function salvarJson(arquivo, dados) {
   } catch (e) {
     console.error('Erro ao salvar ' + arquivo + ':', e);
   }
+}
+
+function carregarTurnoCaixa() {
+  return carregarJson(CAIXA_FILE, {
+    turnoAtual: null,
+    historicoTurnos: []
+  });
+}
+
+function salvarTurnoCaixa(dados) {
+  salvarJson(CAIXA_FILE, dados);
 }
 
 // Validação oficial de Pessoa Física (CPF de 11 dígitos, rejeita vazios, fictícios e sequências repetidas)
@@ -418,6 +430,22 @@ function getPdvHtml() {
       const [modalVendasBoutiqueAberto, setModalVendasBoutiqueAberto] = useState(false);
       const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false);
 
+      // Módulo: Turno de Caixa (Abertura, Sangria, Suprimento e Fechamento)
+      const [modalCaixaAberto, setModalCaixaAberto] = useState(false);
+      const [turnoCaixa, setTurnoCaixa] = useState(null);
+      const [caixaAbaModal, setCaixaAbaModal] = useState('status'); // 'status' | 'abrir' | 'suprimento' | 'sangria' | 'fechar'
+      const [caixaFundoInicial, setCaixaFundoInicial] = useState('100.00');
+      const [caixaMovValor, setCaixaMovValor] = useState('');
+      const [caixaMovMotivo, setCaixaMovMotivo] = useState('');
+      const [caixaDinheiroContado, setCaixaDinheiroContado] = useState('');
+      const [caixaRelatorioFechamento, setCaixaRelatorioFechamento] = useState(null);
+      const [processandoCaixa, setProcessandoCaixa] = useState(false);
+
+      // Módulo: Monitor KDS da Cafeteria & Bistrô (Copa em tempo real)
+      const [modalKdsAberto, setModalKdsAberto] = useState(false);
+      const [kdsPedidos, setKdsPedidos] = useState([]);
+      const [carregandoKds, setCarregandoKds] = useState(false);
+
       // Sub-aba do Modal de Produtos
       const [abaModalProdutos, setAbaModalProdutos] = useState('estoque'); // 'estoque' | 'cadastrar'
       const [salvandoEstoqueId, setSalvandoEstoqueId] = useState(null);
@@ -475,6 +503,7 @@ function getPdvHtml() {
             setColaboradores(data.colaboradores || []);
           }
           if (resCli.ok) setClientes(await resCli.json());
+          carregarStatusCaixa();
           setStatusConexao('online');
         } catch (e) {
           setStatusConexao('offline');
@@ -495,6 +524,175 @@ function getPdvHtml() {
         } finally {
           setCarregandoVendas(false);
         }
+      };
+
+      // Áudio e Leitor Rápido de Código de Barras (EAN-13 / Bip)
+      const tocarBeepPdv = () => {
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return;
+          const ctx = new AudioContextClass();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(1400, ctx.currentTime);
+          gain.gain.setValueAtTime(0.18, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.12);
+        } catch(_) {}
+      };
+
+      const biparCodigoBarras = (codigo) => {
+        if (!codigo || !codigo.trim()) return;
+        const codLimpo = codigo.trim();
+        const produto = produtos.find(p => 
+          String(p.codigo_barras || '') === codLimpo ||
+          String(p.id_produto) === codLimpo ||
+          String(p.sku || '') === codLimpo ||
+          (p.nome && p.nome.toLowerCase() === codLimpo.toLowerCase())
+        );
+        if (produto) {
+          adicionarItem(produto);
+          tocarBeepPdv();
+          avisar('🔔 Bip! ' + produto.nome + ' adicionado ao caixa!');
+          setBusca('');
+        } else {
+          avisar('⚠️ Código de barras ou produto não encontrado: ' + codLimpo);
+        }
+      };
+
+      // Gestão de Turno de Caixa
+      const carregarStatusCaixa = async () => {
+        try {
+          const res = await fetch('/api/pdv/caixa/status');
+          if (res.ok) {
+            const data = await res.json();
+            setTurnoCaixa(data.turno);
+          }
+        } catch(e) {}
+      };
+
+      const abrirTurnoCaixa = async (e) => {
+        if (e) e.preventDefault();
+        try {
+          setProcessandoCaixa(true);
+          const res = await fetch('/api/pdv/caixa/abrir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              operador_nome: operador?.nome || 'Operador Caixa',
+              operador_id: operador?.id || 1,
+              fundo_troco_inicial: Number(caixaFundoInicial) || 0
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setTurnoCaixa(data.turno);
+            setCaixaAbaModal('status');
+            avisar('💵 Caixa aberto com sucesso! Fundo: R$ ' + Number(caixaFundoInicial).toFixed(2));
+          } else {
+            alert(data.erro || 'Erro ao abrir caixa.');
+          }
+        } catch(err) {
+          alert('Erro de conexão ao abrir caixa.');
+        } finally {
+          setProcessandoCaixa(false);
+        }
+      };
+
+      const registrarMovimentoCaixa = async (tipo) => {
+        const valNum = Number(caixaMovValor);
+        if (!valNum || valNum <= 0) {
+          alert('Informe um valor válido maior que zero.');
+          return;
+        }
+        try {
+          setProcessandoCaixa(true);
+          const res = await fetch('/api/pdv/caixa/movimento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tipo,
+              valor: valNum,
+              motivo: caixaMovMotivo || (tipo === 'sangria' ? 'Retirada de segurança' : 'Suprimento de troco'),
+              operador_nome: operador?.nome || 'Operador'
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setTurnoCaixa(data.turno);
+            setCaixaMovValor('');
+            setCaixaMovMotivo('');
+            setCaixaAbaModal('status');
+            avisar('✓ ' + (tipo === 'sangria' ? 'Sangria' : 'Suprimento') + ' registrado: R$ ' + valNum.toFixed(2));
+          } else {
+            alert(data.erro || 'Erro ao registrar movimentação.');
+          }
+        } catch(err) {
+          alert('Erro ao registrar movimentação.');
+        } finally {
+          setProcessandoCaixa(false);
+        }
+      };
+
+      const fecharTurnoCaixa = async (e) => {
+        if (e) e.preventDefault();
+        if (!window.confirm('Confirma o fechamento deste turno de caixa?')) return;
+        try {
+          setProcessandoCaixa(true);
+          const res = await fetch('/api/pdv/caixa/fechar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              operador_nome: operador?.nome || 'Operador',
+              dinheiro_contado: Number(caixaDinheiroContado) || 0
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.sucesso) {
+            setCaixaRelatorioFechamento(data.relatorio);
+            setTurnoCaixa(null);
+            setCaixaDinheiroContado('');
+            setCaixaAbaModal('relatorio');
+            avisar('🔒 Turno de caixa fechado com sucesso!');
+          } else {
+            alert(data.erro || 'Erro ao fechar caixa.');
+          }
+        } catch(err) {
+          alert('Erro ao fechar caixa.');
+        } finally {
+          setProcessandoCaixa(false);
+        }
+      };
+
+      // Gestão KDS (Copa & Bistrô)
+      const carregarKdsPedidos = async () => {
+        setCarregandoKds(true);
+        try {
+          const res = await fetch('/api/pdv/kds/pedidos');
+          if (res.ok) {
+            const data = await res.json();
+            setKdsPedidos(data.pedidos || []);
+          }
+        } catch(e) {}
+        finally { setCarregandoKds(false); }
+      };
+
+      const atualizarStatusKds = async (idPedido, novoStatus) => {
+        try {
+          const res = await fetch('/api/pdv/kds/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_pedido: idPedido, status_kds: novoStatus })
+          });
+          if (res.ok) {
+            carregarKdsPedidos();
+            avisar('☕ Status KDS atualizado!');
+          }
+        } catch(e) {}
       };
 
       const carregarOperadores = async () => {
@@ -1248,6 +1446,36 @@ function getPdvHtml() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Botão Controle de Turno de Caixa */}
+              <button
+                type="button"
+                id="btn-turno-caixa"
+                onClick={() => {
+                  setModalCaixaAberto(true);
+                  carregarStatusCaixa();
+                }}
+                className={"px-2.5 sm:px-3 py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm whitespace-nowrap " + (turnoCaixa ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900' : 'bg-rose-950/80 border-rose-500/60 text-rose-300 hover:bg-rose-900')}
+                title="Gestão de Turno de Caixa (Abertura, Sangria, Suprimento e Fechamento)"
+              >
+                <span>{turnoCaixa ? '💵' : '🔒'}</span>
+                <span>{turnoCaixa ? ('Caixa Aberto (R$ ' + (turnoCaixa.fundo_troco_inicial || 0).toFixed(2) + ')') : 'Caixa Fechado'}</span>
+              </button>
+
+              {/* Botão KDS Copa / Bistrô */}
+              <button
+                type="button"
+                id="btn-abrir-kds"
+                onClick={() => {
+                  setModalKdsAberto(true);
+                  carregarKdsPedidos();
+                }}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-celestial-950 border border-amber-500/50 hover:bg-amber-950/60 text-amber-300 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                title="Monitor da Copa / Cafeteria Bistrô (KDS)"
+              >
+                <span>☕</span>
+                <span>KDS Copa</span>
+              </button>
+
               {/* Botão Módulo de Produtos & Estoque */}
               <button
                 type="button"
@@ -1429,7 +1657,12 @@ function getPdvHtml() {
                       id="input-busca-pdv"
                       value={busca}
                       onChange={e => setBusca(e.target.value)}
-                      placeholder="🔍 Buscar produto por nome ou código..."
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          biparCodigoBarras(busca);
+                        }
+                      }}
+                      placeholder="🔍 Buscar produto ou bipar código de barras (Enter)..."
                       className="w-full bg-celestial-950 border border-ouro/30 rounded-xl px-3 py-1.5 text-xs text-luar-100 placeholder-luar-300/40 focus:outline-none focus:border-ouro"
                     />
                     {busca && (
@@ -2786,6 +3019,40 @@ function getPdvHtml() {
                   </div>
                 </div>
 
+                {/* DRE Simplificado & Margens de Lucro Real */}
+                {(() => {
+                  const fat = vendasBoutique.kpis?.total_geral_valor || 0;
+                  const impSimples = fat * 0.045;
+                  const cpv = fat * 0.35;
+                  const lucroLiq = fat - impSimples - cpv;
+                  const margemLiq = fat > 0 ? ((lucroLiq / fat) * 100).toFixed(1) : '0.0';
+                  const ticketMedio = (vendasBoutique.kpis?.total_geral_qtd || 0) > 0 ? (fat / vendasBoutique.kpis.total_geral_qtd) : 0;
+                  return (
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-celestial-950/80 border border-ouro/30 grid grid-cols-2 sm:grid-cols-4 gap-2 text-left shrink-0">
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-stone-400 block">📊 Receita Líquida</span>
+                        <span className="text-sm font-bold text-luar-100">{formatBRL(fat - impSimples)}</span>
+                        <span className="text-[9px] text-stone-400 block">-4.5% DAS Simples ({formatBRL(impSimples)})</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-stone-400 block">📦 CPV Estimado</span>
+                        <span className="text-sm font-bold text-rose-300">-{formatBRL(cpv)}</span>
+                        <span className="text-[9px] text-rose-400/80 block">~35% Insumos &amp; Peças</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-stone-400 block">💎 Lucro Líquido Real</span>
+                        <span className="text-sm font-bold text-emerald-300">{formatBRL(lucroLiq)}</span>
+                        <span className="text-[9px] text-emerald-400/80 block">Margem Líquida: {margemLiq}%</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-stone-400 block">🏷️ Ticket Médio Omnichannel</span>
+                        <span className="text-sm font-bold text-ouro">{formatBRL(ticketMedio)}</span>
+                        <span className="text-[9px] text-ouro/70 block">Média por pedido</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Filtro por Origem */}
                 <div className="flex items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -3069,19 +3336,36 @@ function getPdvHtml() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 print:hidden">
+                <div className="flex flex-wrap items-center gap-2 pt-2 print:hidden">
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="flex-1 py-2.5 rounded-xl bg-stone-900 text-stone-50 hover:bg-stone-800 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-2"
+                    className="flex-1 min-w-[120px] py-2.5 rounded-xl bg-stone-900 text-stone-50 hover:bg-stone-800 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
                   >
                     <span>🖨️</span>
-                    <span>Imprimir Cupom (80mm)</span>
+                    <span>Imprimir (80mm)</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-whatsapp-cupom"
+                    onClick={() => {
+                      const tel = prompt('Informe o WhatsApp do cliente com DDD (somente números):', '') || '';
+                      const telLimpo = tel.replace(/[^0-9]/g, '');
+                      if (!telLimpo) return;
+                      const dddTel = telLimpo.length <= 11 ? (telLimpo.startsWith('55') ? telLimpo : '55' + telLimpo) : telLimpo;
+                      const itensTxt = (cupomEmitido.itens || []).map(it => '• ' + it.quantidade + 'x ' + it.nome + ' - R$ ' + ((it.preco || 0) * it.quantidade).toFixed(2)).join('\n');
+                      const msg = '✨ *VÊNUS & LUAR BOUTIQUE* ✨\n🧾 *Cupom Fiscal / PDV:* #' + (cupomEmitido.numero_fatura || cupomEmitido.numero_cupom) + '\n📅 *Data:* ' + cupomEmitido.data_hora_formatada + '\n👤 *Cliente:* ' + cupomEmitido.cliente + ' (CPF: ' + cupomEmitido.cpf + ')\n━━━━━━━━━━━━━━━━━━━━\n🛍️ *ITENS COMPRADOS:*\n' + itensTxt + '\n━━━━━━━━━━━━━━━━━━━━\n💳 *Pagamento:* ' + cupomEmitido.forma_pagamento + '\n💰 *Total:* R$ ' + Number(cupomEmitido.total || 0).toFixed(2) + '\n🔐 *Autenticação:* ' + (cupomEmitido.chave_autenticacao || '').substring(0, 24) + '...\n\n_Agradecemos sua preferência na Vênus & Luar Boutique!_';
+                      window.open('https://wa.me/' + dddTel + '?text=' + encodeURIComponent(msg), '_blank');
+                    }}
+                    className="flex-1 min-w-[120px] py-2.5 rounded-xl bg-emerald-700 text-white hover:bg-emerald-600 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    <span>📲</span>
+                    <span>WhatsApp</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setCupomEmitido(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[120px] py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1"
                   >
                     <span>✨ Nova Venda</span>
                   </button>
@@ -3242,6 +3526,343 @@ function getPdvHtml() {
                       );
                     })}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL 6: GESTÃO & CONTROLE DE TURNO DE CAIXA */}
+          {/* ==================================================================== */}
+          {modalCaixaAberto && (
+            <div id="modal-caixa-turno" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-lg bg-celestial-900 border border-ouro/50 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto text-left">
+                <div className="flex items-center justify-between pb-3 border-b border-ouro/25">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">{turnoCaixa ? '💵' : '🔒'}</span>
+                    <div>
+                      <h2 className="font-serif text-base font-bold gold-gradient-text tracking-wide">
+                        {turnoCaixa ? 'Turno de Caixa em Andamento' : 'Abertura de Turno de Caixa'}
+                      </h2>
+                      <p className="text-[10.5px] text-luar-300/70">
+                        {turnoCaixa ? ('Aberto por ' + turnoCaixa.operador_nome + ' em ' + (turnoCaixa.aberto_em_formatado || '')) : 'Abra o turno informando o fundo de troco inicial'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalCaixaAberto(false);
+                      setCaixaAbaModal('status');
+                    }}
+                    className="w-8 h-8 rounded-full bg-celestial-950 border border-ouro/30 text-ouro hover:text-white flex items-center justify-center text-lg font-bold cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Se Caixa Aberto: Painel de Saldos e Ações */}
+                {turnoCaixa ? (
+                  <div className="space-y-4">
+                    {/* Navegação entre Ações do Caixa */}
+                    <div className="flex items-center gap-1.5 p-1 bg-celestial-950/80 rounded-xl border border-ouro/20">
+                      <button
+                        type="button"
+                        onClick={() => setCaixaAbaModal('status')}
+                        className={"flex-1 py-1.5 rounded-lg text-xs font-bold transition-all " + (caixaAbaModal === 'status' ? 'bg-ouro text-celestial-950 shadow' : 'text-luar-200 hover:text-ouro')}
+                      >
+                        📊 Saldos &amp; Gaveta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaixaAbaModal('suprimento')}
+                        className={"flex-1 py-1.5 rounded-lg text-xs font-bold transition-all " + (caixaAbaModal === 'suprimento' ? 'bg-emerald-600 text-white shadow' : 'text-emerald-300 hover:bg-emerald-950/40')}
+                      >
+                        ➕ Suprimento
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaixaAbaModal('sangria')}
+                        className={"flex-1 py-1.5 rounded-lg text-xs font-bold transition-all " + (caixaAbaModal === 'sangria' ? 'bg-rose-700 text-white shadow' : 'text-rose-300 hover:bg-rose-950/40')}
+                      >
+                        ➖ Sangria
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaixaAbaModal('fechar')}
+                        className={"flex-1 py-1.5 rounded-lg text-xs font-bold transition-all " + (caixaAbaModal === 'fechar' ? 'bg-amber-600 text-white shadow' : 'text-amber-300 hover:bg-amber-950/40')}
+                      >
+                        🔒 Fechar Caixa
+                      </button>
+                    </div>
+
+                    {/* Sub-Aba: STATUS / SALDOS */}
+                    {caixaAbaModal === 'status' && (
+                      <div className="space-y-3">
+                        {/* Gaveta Dinheiro */}
+                        <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40">
+                          <span className="text-[10px] uppercase font-bold text-emerald-300 block">💵 Saldo Esperado em Dinheiro na Gaveta</span>
+                          <span className="text-2xl font-serif font-bold text-emerald-200">
+                            R$ {Number((turnoCaixa.fundo_troco_inicial || 0) + (turnoCaixa.total_suprimentos || 0) - (turnoCaixa.total_sangrias || 0) + (turnoCaixa.vendas_dinheiro || 0)).toFixed(2)}
+                          </span>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[10.5px] text-emerald-300/80 pt-2 border-t border-emerald-500/20">
+                            <div>Fundo Inicial: <strong>R$ {Number(turnoCaixa.fundo_troco_inicial || 0).toFixed(2)}</strong></div>
+                            <div>Vendas Dinheiro: <strong>R$ {Number(turnoCaixa.vendas_dinheiro || 0).toFixed(2)}</strong></div>
+                            <div>Suprimentos (+): <strong>R$ {Number(turnoCaixa.total_suprimentos || 0).toFixed(2)}</strong></div>
+                            <div>Sangrias (-): <strong>R$ {Number(turnoCaixa.total_sangrias || 0).toFixed(2)}</strong></div>
+                          </div>
+                        </div>
+
+                        {/* Outras Formas de Pagamento */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20">
+                            <span className="text-[10px] uppercase font-bold text-stone-400 block">💳 Vendas no Cartão</span>
+                            <span className="text-base font-bold text-luar-100">R$ {Number(turnoCaixa.vendas_cartao || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-celestial-950/80 border border-ouro/20">
+                            <span className="text-[10px] uppercase font-bold text-stone-400 block">⚡ Vendas no PIX</span>
+                            <span className="text-base font-bold text-luar-100">R$ {Number(turnoCaixa.vendas_pix || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-celestial-950/60 border border-ouro/20 flex justify-between items-center text-xs">
+                          <span className="text-stone-300 font-bold">Total Faturado no Turno:</span>
+                          <span className="font-serif font-bold text-ouro text-sm">R$ {Number(turnoCaixa.total_vendas || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Aba: SUPRIMENTO / SANGRIA FORM */}
+                    {(caixaAbaModal === 'suprimento' || caixaAbaModal === 'sangria') && (
+                      <div className="p-4 rounded-2xl bg-celestial-950/80 border border-ouro/30 space-y-3">
+                        <h3 className="font-bold text-xs uppercase tracking-wider text-ouro">
+                          {caixaAbaModal === 'suprimento' ? '➕ Registrar Entrada / Suprimento de Troco' : '➖ Registrar Sangria / Retirada de Caixa'}
+                        </h3>
+                        <div>
+                          <label className="text-[11px] text-stone-300 block mb-1">Valor (R$):</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={caixaMovValor}
+                            onChange={e => setCaixaMovValor(e.target.value)}
+                            placeholder="0,00"
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl p-2.5 text-sm text-luar-100 font-mono font-bold focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-stone-300 block mb-1">Motivo / Observação:</label>
+                          <input
+                            type="text"
+                            value={caixaMovMotivo}
+                            onChange={e => setCaixaMovMotivo(e.target.value)}
+                            placeholder={caixaAbaModal === 'suprimento' ? 'Ex: Reforço de moedas pelo gerente' : 'Ex: Sangria para cofre de segurança'}
+                            className="w-full bg-celestial-900 border border-ouro/30 rounded-xl p-2.5 text-xs text-luar-100 focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={processandoCaixa}
+                          onClick={() => registrarMovimentoCaixa(caixaAbaModal)}
+                          className={"w-full py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md " + (caixaAbaModal === 'suprimento' ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-rose-700 hover:bg-rose-600')}
+                        >
+                          {processandoCaixa ? 'Processando...' : ('Confirmar ' + (caixaAbaModal === 'suprimento' ? 'Suprimento' : 'Sangria'))}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Sub-Aba: FECHAR CAIXA */}
+                    {caixaAbaModal === 'fechar' && (
+                      <form onSubmit={fecharTurnoCaixa} className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/40 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">⚠️</span>
+                          <div>
+                            <h3 className="font-bold text-xs text-amber-300 uppercase tracking-wider">Conferência Cega de Fechamento</h3>
+                            <p className="text-[10px] text-stone-300">Conte todas as cédulas e moedas presentes na gaveta antes de encerrar o turno.</p>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-stone-300 block mb-1">Dinheiro Contado na Gaveta (R$):</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={caixaDinheiroContado}
+                            onChange={e => setCaixaDinheiroContado(e.target.value)}
+                            placeholder="Informe o valor contado"
+                            className="w-full bg-celestial-900 border border-ouro/40 rounded-xl p-2.5 text-sm text-luar-100 font-mono font-bold focus:outline-none focus:border-ouro"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={processandoCaixa}
+                          className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+                        >
+                          {processandoCaixa ? 'Fechando Turno...' : '🔒 Confirmar Fechamento e Emitir Relatório'}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                ) : (
+                  /* Form de Abertura quando Caixa está Fechado */
+                  caixaAbaModal === 'relatorio' && caixaRelatorioFechamento ? (
+                    <div className="p-4 rounded-2xl bg-stone-100 text-stone-900 font-mono text-xs space-y-2">
+                      <div className="text-center font-bold text-sm border-b pb-1">RELATÓRIO DE FECHAMENTO DE CAIXA</div>
+                      <div className="flex justify-between"><span>OPERADOR:</span><span>{caixaRelatorioFechamento.fechado_por}</span></div>
+                      <div className="flex justify-between"><span>ABERTO EM:</span><span>{caixaRelatorioFechamento.aberto_em_formatado}</span></div>
+                      <div className="flex justify-between"><span>FECHADO EM:</span><span>{caixaRelatorioFechamento.fechado_em_formatado}</span></div>
+                      <div className="border-t pt-1 flex justify-between"><span>FUNDO INICIAL:</span><span>R$ {Number(caixaRelatorioFechamento.fundo_troco_inicial || 0).toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>SUPRIMENTOS (+):</span><span>R$ {Number(caixaRelatorioFechamento.total_suprimentos || 0).toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>SANGRIAS (-):</span><span>R$ {Number(caixaRelatorioFechamento.total_sangrias || 0).toFixed(2)}</span></div>
+                      <div className="flex justify-between"><span>VENDAS DINHEIRO:</span><span>R$ {Number(caixaRelatorioFechamento.vendas_dinheiro || 0).toFixed(2)}</span></div>
+                      <div className="border-t pt-1 flex justify-between font-bold"><span>ESPERADO DINHEIRO:</span><span>R$ {Number(caixaRelatorioFechamento.saldo_esperado_dinheiro || 0).toFixed(2)}</span></div>
+                      <div className="flex justify-between font-bold"><span>DINHEIRO CONTADO:</span><span>R$ {Number(caixaRelatorioFechamento.dinheiro_contado || 0).toFixed(2)}</span></div>
+                      <div className={"flex justify-between font-bold text-sm pt-1 border-t " + (caixaRelatorioFechamento.quebra_caixa < 0 ? 'text-red-700' : 'text-emerald-700')}>
+                        <span>{caixaRelatorioFechamento.quebra_caixa < 0 ? 'QUEBRA DE CAIXA:' : 'SOBRA DE CAIXA:'}</span>
+                        <span>R$ {Number(Math.abs(caixaRelatorioFechamento.quebra_caixa || 0)).toFixed(2)}</span>
+                      </div>
+                      <div className="pt-2">
+                        <button type="button" onClick={() => window.print()} className="w-full py-2 bg-stone-900 text-white rounded-xl text-xs font-bold uppercase cursor-pointer">🖨️ Imprimir Resumo</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={abrirTurnoCaixa} className="p-4 rounded-2xl bg-celestial-950/80 border border-ouro/30 space-y-4">
+                      <div>
+                        <label className="text-xs text-stone-300 block mb-1">Operador Responsável:</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={operador?.nome || 'Operador'}
+                          className="w-full bg-celestial-900 border border-ouro/20 rounded-xl p-2.5 text-xs text-ouro-light font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-stone-300 block mb-1">Fundo de Troco Inicial (R$):</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={caixaFundoInicial}
+                          onChange={e => setCaixaFundoInicial(e.target.value)}
+                          placeholder="100,00"
+                          className="w-full bg-celestial-900 border border-ouro/40 rounded-xl p-2.5 text-sm text-luar-100 font-mono font-bold focus:outline-none focus:border-ouro"
+                        />
+                        <span className="text-[10px] text-stone-400 block mt-1">Valor em moedas e cédulas colocado na gaveta no início do expediente.</span>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={processandoCaixa}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2"
+                      >
+                        <span>🔓</span>
+                        <span>{processandoCaixa ? 'Abrindo Caixa...' : 'Abrir Turno de Caixa'}</span>
+                      </button>
+                    </form>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================================== */}
+          {/* MODAL 7: MONITOR DA COPA & BISTRÔ (KDS - KITCHEN DISPLAY SYSTEM) */}
+          {/* ==================================================================== */}
+          {modalKdsAberto && (
+            <div id="modal-kds" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+              <div className="relative w-full max-w-4xl bg-celestial-900 border border-ouro/50 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[92vh] flex flex-col text-left">
+                <div className="flex items-center justify-between pb-3 border-b border-ouro/25 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">☕</span>
+                    <div>
+                      <h2 className="font-serif text-lg font-bold gold-gradient-text tracking-wide">
+                        Monitor da Copa &amp; Cafeteria Bistrô (KDS)
+                      </h2>
+                      <p className="text-xs text-luar-300/80">
+                        Fila de pedidos da cafeteria em tempo real para o barista e copa
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={carregarKdsPedidos}
+                      className="px-2.5 py-1.5 rounded-xl bg-celestial-950 border border-ouro/30 text-ouro text-xs font-bold hover:bg-celestial-800 transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <span>🔄</span>
+                      <span>Atualizar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalKdsAberto(false)}
+                      className="w-8 h-8 rounded-full bg-celestial-950 border border-ouro/30 text-ouro hover:text-white flex items-center justify-center text-lg font-bold cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                {/* Lista de Pedidos KDS */}
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  {carregandoKds ? (
+                    <div className="text-center py-12 text-ouro text-xs animate-pulse">Carregando pedidos da copa...</div>
+                  ) : kdsPedidos.length === 0 ? (
+                    <div className="text-center py-12 text-stone-400 text-xs">Nenhum pedido de cafeteria ou bistrô na fila no momento.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {kdsPedidos.map(p => {
+                        const st = p.status_kds || 'em_preparo';
+                        return (
+                          <div key={p.id_pedido} className="p-3.5 rounded-2xl bg-celestial-950/80 border border-ouro/25 space-y-2.5 flex flex-col justify-between shadow-md">
+                            <div>
+                              <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-ouro/15">
+                                <span className="font-mono font-bold text-xs text-ouro">
+                                  #{p.numero_comanda || p.numero_fatura || p.id_pedido}
+                                </span>
+                                <span className={"px-2 py-0.5 rounded-full text-[9px] font-bold uppercase " + (st === 'pronto' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : st === 'em_preparo' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30')}>
+                                  {st === 'pronto' ? '✓ Pronto' : st === 'em_preparo' ? '🔥 Em Preparo' : '🕒 Na Fila'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-luar-100 font-semibold mt-1">
+                                👤 {p.nome_cliente || 'Mesa / Balcão'}
+                              </p>
+                              <div className="mt-2 space-y-1 text-xs">
+                                {(p.itens || []).map((it, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-[11px] text-stone-200">
+                                    <span><strong>{it.quantidade}x</strong> {it.nome}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Controles do Barista */}
+                            <div className="pt-2 border-t border-ouro/15 flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => atualizarStatusKds(p.id_pedido, 'em_preparo')}
+                                className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'em_preparo' ? 'bg-blue-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
+                              >
+                                🔥 Preparar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => atualizarStatusKds(p.id_pedido, 'pronto')}
+                                className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'pronto' ? 'bg-emerald-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
+                              >
+                                ✅ Pronto
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => atualizarStatusKds(p.id_pedido, 'entregue')}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-celestial-900 text-stone-400 hover:text-stone-200 transition-all cursor-pointer"
+                                title="Marcar como entregue ao cliente"
+                              >
+                                🍽️
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -3778,6 +4399,210 @@ const server = http.createServer((req, res) => {
   }
 
   // =========================================================================
+  // API: CONTROLE DE TURNO DE CAIXA (ABERTURA, SANGRIA, SUPRIMENTO, FECHAMENTO)
+  // =========================================================================
+
+  // GET /api/pdv/caixa/status
+  if (pathname === '/api/pdv/caixa/status' && req.method === 'GET') {
+    const dadosCaixa = carregarTurnoCaixa();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      sucesso: true,
+      turno: dadosCaixa.turnoAtual,
+      aberto: Boolean(dadosCaixa.turnoAtual && dadosCaixa.turnoAtual.status === 'aberto'),
+      historico: (dadosCaixa.historicoTurnos || []).slice(-10)
+    }));
+    return;
+  }
+
+  // POST /api/pdv/caixa/abrir
+  if (pathname === '/api/pdv/caixa/abrir' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { operador_nome, operador_id, fundo_troco_inicial } = JSON.parse(body || '{}');
+        const dadosCaixa = carregarTurnoCaixa();
+        if (dadosCaixa.turnoAtual && dadosCaixa.turnoAtual.status === 'aberto') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Já existe um turno de caixa aberto no momento.' }));
+          return;
+        }
+        const fundo = Number(fundo_troco_inicial) || 0;
+        const novoTurno = {
+          id: 'TURNO-' + Date.now(),
+          operador_nome: operador_nome || 'Operador',
+          operador_id: operador_id || 1,
+          aberto_em: getBrasiliaIsoString(),
+          aberto_em_formatado: formatarDataHoraBrasilia(),
+          fundo_troco_inicial: fundo,
+          suprimentos: [],
+          sangrias: [],
+          total_suprimentos: 0,
+          total_sangrias: 0,
+          vendas_dinheiro: 0,
+          vendas_cartao: 0,
+          vendas_pix: 0,
+          total_vendas: 0,
+          pedidos_faturados: [],
+          status: 'aberto'
+        };
+        dadosCaixa.turnoAtual = novoTurno;
+        salvarTurnoCaixa(dadosCaixa);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, turno: novoTurno }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao abrir turno de caixa.' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/pdv/caixa/movimento (Sangria ou Suprimento)
+  if (pathname === '/api/pdv/caixa/movimento' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { tipo, valor, motivo, operador_nome } = JSON.parse(body || '{}');
+        const dadosCaixa = carregarTurnoCaixa();
+        if (!dadosCaixa.turnoAtual || dadosCaixa.turnoAtual.status !== 'aberto') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Nenhum turno de caixa aberto no momento.' }));
+          return;
+        }
+        const valNum = Number(valor) || 0;
+        if (valNum <= 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'O valor da movimentação deve ser maior que zero.' }));
+          return;
+        }
+        const t = dadosCaixa.turnoAtual;
+        const mov = {
+          id: 'MOV-' + Date.now(),
+          tipo, // 'suprimento' | 'sangria'
+          valor: valNum,
+          motivo: motivo || (tipo === 'sangria' ? 'Retirada de segurança' : 'Reforço de troco'),
+          operador_nome: operador_nome || t.operador_nome,
+          hora: formatarDataHoraBrasilia()
+        };
+        if (!t.sangrias) t.sangrias = [];
+        if (!t.suprimentos) t.suprimentos = [];
+        if (tipo === 'sangria') {
+          t.sangrias.push(mov);
+          t.total_sangrias = Number(((t.total_sangrias || 0) + valNum).toFixed(2));
+        } else {
+          t.suprimentos.push(mov);
+          t.total_suprimentos = Number(((t.total_suprimentos || 0) + valNum).toFixed(2));
+        }
+        salvarTurnoCaixa(dadosCaixa);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, turno: t, movimento: mov }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao registrar movimentação.' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/pdv/caixa/fechar (Fechamento com conferência cega)
+  if (pathname === '/api/pdv/caixa/fechar' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { operador_nome, dinheiro_contado } = JSON.parse(body || '{}');
+        const dadosCaixa = carregarTurnoCaixa();
+        if (!dadosCaixa.turnoAtual || dadosCaixa.turnoAtual.status !== 'aberto') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Nenhum turno de caixa aberto para fechar.' }));
+          return;
+        }
+        const t = dadosCaixa.turnoAtual;
+        const contado = Number(dinheiro_contado) || 0;
+        const esperadoDinheiro = Number(((t.fundo_troco_inicial || 0) + (t.total_suprimentos || 0) - (t.total_sangrias || 0) + (t.vendas_dinheiro || 0)).toFixed(2));
+        const quebra = Number((contado - esperadoDinheiro).toFixed(2));
+
+        const fechamento = {
+          ...t,
+          fechado_em: getBrasiliaIsoString(),
+          fechado_em_formatado: formatarDataHoraBrasilia(),
+          fechado_por: operador_nome || t.operador_nome,
+          saldo_esperado_dinheiro: esperadoDinheiro,
+          dinheiro_contado: contado,
+          quebra_caixa: quebra,
+          status: 'fechado'
+        };
+
+        if (!dadosCaixa.historicoTurnos) dadosCaixa.historicoTurnos = [];
+        dadosCaixa.historicoTurnos.push(fechamento);
+        dadosCaixa.turnoAtual = null;
+        salvarTurnoCaixa(dadosCaixa);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, relatorio: fechamento }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao fechar caixa.' }));
+      }
+    });
+    return;
+  }
+
+  // =========================================================================
+  // API: MONITOR DA COPA & BISTRÔ (KDS - KITCHEN DISPLAY SYSTEM)
+  // =========================================================================
+
+  // GET /api/pdv/kds/pedidos
+  if (pathname === '/api/pdv/kds/pedidos' && req.method === 'GET') {
+    const pedidos = carregarJson(ORDERS_FILE, []);
+    const kdsPedidos = pedidos.filter(p => {
+      const tipo = (p.tipo_pedido || '').toLowerCase();
+      const st = (p.status || '').toLowerCase();
+      const temItensBistro = (p.itens || []).some(it => {
+        const cat = (it.categoria || '').toLowerCase();
+        const nome = (it.nome || '').toLowerCase();
+        return cat.includes('cafeteria') || cat.includes('bistr') || nome.includes('café') || nome.includes('croissant') || nome.includes('chá');
+      });
+      return (tipo.includes('bistrô') || temItensBistro) && !st.includes('cancelado');
+    }).map(p => ({
+      ...p,
+      status_kds: p.status_kds || (p.status && p.status.includes('Liquidado') ? 'pronto' : 'em_preparo')
+    }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ sucesso: true, pedidos: kdsPedidos.slice(0, 30) }));
+    return;
+  }
+
+  // POST /api/pdv/kds/status
+  if (pathname === '/api/pdv/kds/status' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const { id_pedido, status_kds } = JSON.parse(body || '{}');
+        const pedidos = carregarJson(ORDERS_FILE, []);
+        const ped = pedidos.find(p => String(p.id_pedido) === String(id_pedido) || p.numero_fatura === id_pedido || p.numero_comanda === id_pedido);
+        if (!ped) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ erro: 'Pedido não encontrado.' }));
+          return;
+        }
+        ped.status_kds = status_kds; // 'na_fila' | 'em_preparo' | 'pronto' | 'entregue'
+        salvarJson(ORDERS_FILE, pedidos);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sucesso: true, pedido: ped }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'Erro ao atualizar status KDS.' }));
+      }
+    });
+    return;
+  }
+
+  // =========================================================================
   // API: FATURAR PEDIDO NO PDV (PASSO 4 OBRIGATÓRIO - PESSOA FÍSICA)
   // =========================================================================
   const handlerFaturar = (req, res) => {
@@ -4074,6 +4899,29 @@ const server = http.createServer((req, res) => {
         }
 
         salvarJson(ORDERS_FILE, pedidos);
+
+        // Atualizar Turno do Caixa Ativo caso aberto
+        try {
+          const dadosCaixa = carregarTurnoCaixa();
+          if (dadosCaixa.turnoAtual && dadosCaixa.turnoAtual.status === 'aberto') {
+            const t = dadosCaixa.turnoAtual;
+            const fp = String(forma_pagamento || '').toLowerCase();
+            const valorFinalNum = Number(totalFinal.toFixed(2));
+            if (fp.includes('dinheiro')) {
+              t.vendas_dinheiro = Number(((t.vendas_dinheiro || 0) + valorFinalNum).toFixed(2));
+            } else if (fp.includes('pix')) {
+              t.vendas_pix = Number(((t.vendas_pix || 0) + valorFinalNum).toFixed(2));
+            } else {
+              t.vendas_cartao = Number(((t.vendas_cartao || 0) + valorFinalNum).toFixed(2));
+            }
+            t.total_vendas = Number(((t.total_vendas || 0) + valorFinalNum).toFixed(2));
+            if (!t.pedidos_faturados) t.pedidos_faturados = [];
+            t.pedidos_faturados.push(numeroFatura);
+            salvarTurnoCaixa(dadosCaixa);
+          }
+        } catch (eCaixa) {
+          console.error('Erro ao atualizar turno caixa:', eCaixa);
+        }
 
         // Atualizar também o cliente em usuarios.json caso necessário
         const usuarios = carregarJson(USERS_FILE, []);

@@ -7,4 +7,22 @@ services:
     startCommand: node app-server.js
     envVars:
       - key: NODE_VERSION
-        value: 20.10.0
+        value: 22.11.0
+      - key: TZ
+        value: America/Sao_Paulo
+      - key: PDV_URL
+        sync: false
+
+  - type: web
+    name: pdv-venus
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node pdv/server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: TZ
+        value: America/Sao_Paulo
+      - key: BOUTIQUE_URL
+        sync: false

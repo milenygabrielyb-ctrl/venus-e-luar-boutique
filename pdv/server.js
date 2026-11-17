@@ -819,15 +819,26 @@ function getPdvHtml() {
         return () => clearInterval(interval);
       }, []);
 
-      // Atalhos de Teclado (F2 Faturar, Esc Fechar Modais)
+      // Atalhos de Teclado Profissionais (F2 Faturar, F3 Bipar, F4 Caixa, F6 KDS, Esc Fechar)
       useEffect(() => {
         const handleKeys = (e) => {
           if (e.key === 'F2') {
             e.preventDefault();
             const btn = document.getElementById('btn-faturar-pedido-pdv');
             if (btn && !btn.disabled) btn.click();
+          } else if (e.key === 'F3') {
+            e.preventDefault();
+            document.getElementById('input-busca-pdv')?.focus();
+          } else if (e.key === 'F4') {
+            e.preventDefault();
+            setModalCaixaAberto(prev => !prev);
+          } else if (e.key === 'F6') {
+            e.preventDefault();
+            setModalKdsAberto(prev => !prev);
           } else if (e.key === 'Escape') {
             setCupomEmitido(null);
+            setModalCaixaAberto(false);
+            setModalKdsAberto(false);
             setModalEquipeAberto(false);
             setModalProdutosEstoqueAberto(false);
             setModalVendasBoutiqueAberto(false);
@@ -852,29 +863,49 @@ function getPdvHtml() {
         avisar('Operador ativo alterado para ' + info.nome + '!');
       };
 
-      // Adicionar produto do catálogo ao carrinho
+      // Adicionar produto do catálogo ao carrinho com validação estrita de estoque
       const adicionarItem = (prod) => {
+        const estoqueDisp = prod.estoque !== undefined ? Number(prod.estoque) : 999;
         const existe = itensCaixa.find(it => it.id_produto === prod.id_produto);
+        const qtdAtual = existe ? existe.quantidade : 0;
+
+        if (estoqueDisp <= 0) {
+          avisar('⚠️ Produto esgotado no estoque físico: ' + (prod.nome_item || prod.nome));
+          return;
+        }
+
+        if (qtdAtual + 1 > estoqueDisp) {
+          avisar('⚠️ Limite de estoque atingido (' + estoqueDisp + ' un) para: ' + (prod.nome_item || prod.nome));
+          return;
+        }
+
         if (existe) {
           setItensCaixa(itensCaixa.map(it => it.id_produto === prod.id_produto ? { ...it, quantidade: it.quantidade + 1 } : it));
         } else {
           setItensCaixa([...itensCaixa, {
             id_produto: prod.id_produto,
-            nome_item: prod.nome_item,
+            nome_item: prod.nome_item || prod.nome,
             preco: Number(prod.preco),
             quantidade: 1,
             categoria: prod.categoria,
             imagem_url: prod.imagem_url
           }]);
         }
-        avisar('+1 ' + prod.nome_item + ' adicionado ao pedido!');
+        avisar('+1 ' + (prod.nome_item || prod.nome) + ' adicionado ao pedido!');
       };
 
-      // Alterar quantidade
+      // Alterar quantidade com limite de estoque
       const alterarQtd = (idProd, delta) => {
+        const prodRef = produtos.find(p => p.id_produto === idProd);
+        const estoqueMax = prodRef && prodRef.estoque !== undefined ? Number(prodRef.estoque) : 999;
+
         setItensCaixa(itensCaixa.map(it => {
           if (it.id_produto === idProd) {
             const nova = it.quantidade + delta;
+            if (delta > 0 && nova > estoqueMax) {
+              avisar('⚠️ Estoque máximo disponível: ' + estoqueMax + ' unidades.');
+              return it;
+            }
             return nova > 0 ? { ...it, quantidade: nova } : null;
           }
           return it;
@@ -935,6 +966,13 @@ function getPdvHtml() {
       // PASSO 4: FATURAR PEDIDO & EMITIR NOTA FISCAL (REGRA PESSOA FÍSICA)
       // =====================================================================
       const faturarPedidoPdv = async () => {
+        // Validação de Segurança: Turno de Caixa Aberto Obrigatório
+        if (!turnoCaixa) {
+          avisar('🔒 O Turno de Caixa está FECHADO! Abra o caixa com o fundo de troco antes de faturar.');
+          setModalCaixaAberto(true);
+          return;
+        }
+
         // Validação Estrita do Passo 1: Cliente Pessoa Física Obrigatório
         if (!clienteSelecionado || !clienteSelecionado.cpf || clienteSelecionado.cpf.replace(/[^0-9]/g, '').length !== 11) {
           avisar('⚠️ PASSO 1: Selecione ou cadastre o Cliente com CPF válido (11 dígitos).');
@@ -1514,6 +1552,17 @@ function getPdvHtml() {
                 <span className="hidden sm:inline">Equipe</span>
               </button>
 
+              {/* Botão Download Backup SQLite */}
+              <a
+                href="/api/pdv/backup"
+                download
+                className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-celestial-950 border border-ouro/40 hover:bg-ouro/10 text-ouro text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm whitespace-nowrap"
+                title="Fazer download de backup do banco de dados relacional SQLite"
+              >
+                <span>💾</span>
+                <span className="hidden md:inline">Backup</span>
+              </a>
+
               {/* Botão Limpar Venda */}
               <button
                 type="button"
@@ -1731,9 +1780,9 @@ function getPdvHtml() {
                                 <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-950/90 text-rose-300 border border-rose-500/40">
                                   Esgotado
                                 </span>
-                              ) : estoqueNum === 1 ? (
+                              ) : estoqueNum <= 3 ? (
                                 <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-950/90 text-amber-300 border border-amber-400 animate-pulse">
-                                  ⚡ 1 un
+                                  ⚠️ Restam {estoqueNum}
                                 </span>
                               ) : (
                                 <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-celestial-950/90 text-emerald-400 border border-emerald-500/30">
@@ -4396,6 +4445,25 @@ const server = http.createServer((req, res) => {
       }
     });
     return;
+  }
+
+  // GET /api/pdv/backup (Download de Backup do Banco SQLite)
+  if (pathname === '/api/pdv/backup' && req.method === 'GET') {
+    const dbPath = path.join(__dirname, '..', 'storage', 'database.sqlite');
+    if (fs.existsSync(dbPath)) {
+      const dataHora = getBrasiliaIsoString().slice(0, 10);
+      const filename = `venus_e_luar_backup_${dataHora}.sqlite`;
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.sqlite3',
+        'Content-Disposition': `attachment; filename="${filename}"`
+      });
+      fs.createReadStream(dbPath).pipe(res);
+      return;
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ erro: 'Arquivo de banco de dados não encontrado.' }));
+      return;
+    }
   }
 
   // =========================================================================

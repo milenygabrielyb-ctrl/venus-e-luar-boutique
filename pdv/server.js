@@ -79,6 +79,7 @@ const PRODUCTS_FILE = path.join(DATA_DIR, 'produtos.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'pedidos.json');
 const USERS_FILE = path.join(DATA_DIR, 'usuarios.json');
 const CAIXA_FILE = path.join(DATA_DIR, 'caixa_turnos.json');
+const FIDELIDADE_FILE = path.join(DATA_DIR, 'fidelidade.json');
 
 function carregarJson(arquivo, fallback) {
   try {
@@ -108,6 +109,87 @@ function carregarTurnoCaixa() {
 
 function salvarTurnoCaixa(dados) {
   salvarJson(CAIXA_FILE, dados);
+}
+
+function calcularDigitoEan13(str12) {
+  let soma = 0;
+  for (let i = 0; i < 12; i++) {
+    const dig = parseInt(str12[i], 10);
+    soma += (i % 2 === 0) ? dig * 1 : dig * 3;
+  }
+  return (10 - (soma % 10)) % 10;
+}
+
+function gerarEan13(id) {
+  const base = '7891234' + String(id).padStart(5, '0');
+  return base + calcularDigitoEan13(base);
+}
+
+function obterFidelidadeCliente(cpf) {
+  const cpfLimpo = String(cpf || '').replace(/[^0-9]/g, '');
+  if (cpfLimpo.length !== 11) return null;
+  const fidelidadeMap = carregarJson(FIDELIDADE_FILE, {});
+  return fidelidadeMap[cpfLimpo] || {
+    cpf: cpfLimpo,
+    saldo_cashback: 0,
+    total_acumulado: 0,
+    total_resgatado: 0,
+    historico: []
+  };
+}
+
+function creditarCashbackCliente(cpf, nome, valorCompra, numeroFatura) {
+  const cpfLimpo = String(cpf || '').replace(/[^0-9]/g, '');
+  if (cpfLimpo.length !== 11 || valorCompra <= 0) return { creditado: 0, saldo: 0 };
+  const fidelidadeMap = carregarJson(FIDELIDADE_FILE, {});
+  if (!fidelidadeMap[cpfLimpo]) {
+    fidelidadeMap[cpfLimpo] = {
+      cpf: cpfLimpo,
+      nome_cliente: nome || 'Cliente Vênus & Luar',
+      saldo_cashback: 0,
+      total_acumulado: 0,
+      total_resgatado: 0,
+      historico: []
+    };
+  }
+  const f = fidelidadeMap[cpfLimpo];
+  const valorCredito = Number((valorCompra * 0.05).toFixed(2));
+  f.saldo_cashback = Number(((f.saldo_cashback || 0) + valorCredito).toFixed(2));
+  f.total_acumulado = Number(((f.total_acumulado || 0) + valorCredito).toFixed(2));
+  f.nome_cliente = nome || f.nome_cliente;
+  f.atualizado_em = getBrasiliaIsoString();
+  if (!f.historico) f.historico = [];
+  f.historico.unshift({
+    data: getBrasiliaIsoString(),
+    tipo: 'CREDITO',
+    valor: valorCredito,
+    pedido: numeroFatura,
+    descricao: `Cashback 5% da compra ${numeroFatura}`
+  });
+  salvarJson(FIDELIDADE_FILE, fidelidadeMap);
+  return { creditado: valorCredito, saldo: f.saldo_cashback };
+}
+
+function resgatarCashbackCliente(cpf, valorResgate, numeroFatura) {
+  const cpfLimpo = String(cpf || '').replace(/[^0-9]/g, '');
+  if (cpfLimpo.length !== 11 || valorResgate <= 0) return { resgatado: 0, saldo: 0 };
+  const fidelidadeMap = carregarJson(FIDELIDADE_FILE, {});
+  const f = fidelidadeMap[cpfLimpo];
+  if (!f || (f.saldo_cashback || 0) <= 0) return { resgatado: 0, saldo: 0 };
+  const valorEfetivo = Math.min(Number(f.saldo_cashback.toFixed(2)), Number(valorResgate.toFixed(2)));
+  f.saldo_cashback = Number(((f.saldo_cashback || 0) - valorEfetivo).toFixed(2));
+  f.total_resgatado = Number(((f.total_resgatado || 0) + valorEfetivo).toFixed(2));
+  f.atualizado_em = getBrasiliaIsoString();
+  if (!f.historico) f.historico = [];
+  f.historico.unshift({
+    data: getBrasiliaIsoString(),
+    tipo: 'RESGATE',
+    valor: valorEfetivo,
+    pedido: numeroFatura,
+    descricao: `Resgate de créditos na compra ${numeroFatura}`
+  });
+  salvarJson(FIDELIDADE_FILE, fidelidadeMap);
+  return { resgatado: valorEfetivo, saldo: f.saldo_cashback };
 }
 
 // Validação oficial de Pessoa Física (CPF de 11 dígitos, rejeita vazios, fictícios e sequências repetidas)
@@ -285,10 +367,11 @@ function getPdvHtml() {
       }
     }
 
-    /* Estilos de Impressão Térmica 80mm */
+    /* Estilos de Impressão Térmica 80mm e Etiquetas Adesivas */
     @media print {
       body * { visibility: hidden; }
       #area-cupom-impressao, #area-cupom-impressao * { visibility: visible; }
+      #area-etiquetas-impressao, #area-etiquetas-impressao * { visibility: visible; }
       #area-cupom-impressao {
         position: absolute;
         left: 0;
@@ -299,6 +382,41 @@ function getPdvHtml() {
         font-family: monospace !important;
         color: #000 !important;
         background: #fff !important;
+      }
+      #area-etiquetas-impressao {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 5mm !important;
+        background: #fff !important;
+        color: #000 !important;
+      }
+      .grade-a4 {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 2.5mm !important;
+        width: 100% !important;
+      }
+      .etiqueta-print-card {
+        border: 1px dashed #bbb !important;
+        padding: 2.5mm !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        background: #fff !important;
+        color: #000 !important;
+        text-align: center !important;
+        box-sizing: border-box !important;
+      }
+      .rolo-termico .etiqueta-print-card {
+        width: 50mm !important;
+        height: 30mm !important;
+        margin: 0 auto 5mm auto !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        border: 1px solid #ccc !important;
       }
       .nao-imprimir { display: none !important; }
     }
@@ -361,6 +479,61 @@ function getPdvHtml() {
       return true;
     }
 
+    // Componente Vetorial Pure SVG para Código de Barras EAN-13 GS1 (Zero Dependências)
+    function GerarCodigoBarrasSvg({ codigo }) {
+      const L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+      const G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+      const R = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+      const P = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+
+      const codLimpo = String(codigo || '').replace(/[^0-9]/g, '');
+      const padCode = (codLimpo.length >= 12 ? codLimpo.slice(0, 12) : codLimpo.padStart(12, '0'));
+      let soma = 0;
+      for (let i = 0; i < 12; i++) {
+        const d = parseInt(padCode[i], 10);
+        soma += (i % 2 === 0) ? d * 1 : d * 3;
+      }
+      const digito = (10 - (soma % 10)) % 10;
+      const full13 = padCode + (codLimpo.length >= 13 ? codLimpo[12] : String(digito));
+
+      const first = parseInt(full13[0], 10);
+      const parity = P[first] || P[0];
+
+      let bits = '101';
+      for (let i = 1; i <= 6; i++) {
+        const d = parseInt(full13[i], 10);
+        bits += (parity[i - 1] === 'L') ? L[d] : G[d];
+      }
+      bits += '01010';
+      for (let i = 7; i <= 12; i++) {
+        const d = parseInt(full13[i], 10);
+        bits += R[d];
+      }
+      bits += '101';
+
+      const rects = [];
+      for (let b = 0; b < bits.length; b++) {
+        if (bits[b] === '1') {
+          const isGuard = (b < 3) || (b >= 45 && b < 50) || (b >= 92);
+          const h = isGuard ? 34 : 30;
+          rects.push(
+            <rect key={b} x={b * 1.3} y={0} width={1.3} height={h} fill="#000" />
+          );
+        }
+      }
+
+      return (
+        <div style={{ display: 'inline-block', textAlign: 'center', background: '#fff', padding: '1px 2px' }}>
+          <svg viewBox={'0 0 ' + (95 * 1.3) + ' 36'} style={{ width: '135px', height: '36px', display: 'block', margin: '0 auto' }}>
+            {rects}
+          </svg>
+          <div style={{ fontFamily: 'monospace', fontSize: '9px', fontWeight: 'bold', color: '#000', letterSpacing: '1px', marginTop: '1px' }}>
+            {full13[0]} {full13.slice(1, 7)} {full13.slice(7, 13)}
+          </div>
+        </div>
+      );
+    }
+
     function PdvApp() {
       // Operador Atual (Salvo ou null para exibir tela de Login/Cadastro Inicial)
       const [operador, setOperador] = useState(() => {
@@ -396,6 +569,7 @@ function getPdvHtml() {
       // Venda Ativa no Caixa (Fluxo Guiado em 4 Etapas)
       // PASSO 1: Cliente Pessoa Física (Obrigatório)
       const [clienteSelecionado, setClienteSelecionado] = useState(null);
+      const [cashbackCliente, setCashbackCliente] = useState(null);
       const [buscaCliente, setBuscaCliente] = useState('');
       const [mostrarSugestoesCliente, setMostrarSugestoesCliente] = useState(false);
 
@@ -406,6 +580,7 @@ function getPdvHtml() {
 
       // PASSO 3: Forma de Pagamento & Desconto
       const [desconto, setDesconto] = useState(0);
+      const [usarCashback, setUsarCashback] = useState(false);
       const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
       const [valorRecebido, setValorRecebido] = useState('');
 
@@ -429,6 +604,9 @@ function getPdvHtml() {
       const [modalProdutosEstoqueAberto, setModalProdutosEstoqueAberto] = useState(false);
       const [modalVendasBoutiqueAberto, setModalVendasBoutiqueAberto] = useState(false);
       const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false);
+      const [modalEtiquetasAberto, setModalEtiquetasAberto] = useState(false);
+      const [etiquetasSelecionadas, setEtiquetasSelecionadas] = useState({});
+      const [formatoEtiqueta, setFormatoEtiqueta] = useState('a4'); // 'a4' | 'termica'
 
       // Módulo: Turno de Caixa (Abertura, Sangria, Suprimento e Fechamento)
       const [modalCaixaAberto, setModalCaixaAberto] = useState(false);
@@ -689,8 +867,13 @@ function getPdvHtml() {
             body: JSON.stringify({ id_pedido: idPedido, status_kds: novoStatus })
           });
           if (res.ok) {
+            const data = await res.json();
             carregarKdsPedidos();
-            avisar('☕ Status KDS atualizado!');
+            avisar('☕ Status KDS atualizado para ' + novoStatus.toUpperCase() + '!');
+            if (novoStatus === 'pronto' && data.whatsapp_url) {
+              window.open(data.whatsapp_url, '_blank');
+              avisar('📲 Notificação de Pedido Pronto aberta no WhatsApp!');
+            }
           }
         } catch(e) {}
       };
@@ -843,12 +1026,35 @@ function getPdvHtml() {
             setModalProdutosEstoqueAberto(false);
             setModalVendasBoutiqueAberto(false);
             setModalNovoClienteAberto(false);
+            setModalEtiquetasAberto(false);
             setPedidoDetalhesModal(null);
           }
         };
         window.addEventListener('keydown', handleKeys);
         return () => window.removeEventListener('keydown', handleKeys);
       }, []);
+
+      // Consultar Saldo do Programa de Fidelidade & Cashback Haute Couture
+      useEffect(() => {
+        if (clienteSelecionado && clienteSelecionado.cpf) {
+          const cpfLimpo = (clienteSelecionado.cpf || '').replace(/[^0-9]/g, '');
+          if (cpfLimpo.length === 11) {
+            fetch('/api/pdv/fidelidade?cpf=' + cpfLimpo)
+              .then(r => r.json())
+              .then(data => {
+                if (data && data.fidelidade) {
+                  setCashbackCliente(data.fidelidade);
+                } else {
+                  setCashbackCliente(null);
+                }
+              })
+              .catch(() => setCashbackCliente(null));
+            return;
+          }
+        }
+        setCashbackCliente(null);
+        setUsarCashback(false);
+      }, [clienteSelecionado]);
 
       // Seleção rápida de operadora
       const selecionarOperador = (colab) => {
@@ -953,13 +1159,16 @@ function getPdvHtml() {
         setItensCaixa([]);
         setLocalConsumo('Venda Balcão / Loja Física');
         setDesconto(0);
+        setUsarCashback(false);
+        setCashbackCliente(null);
         setValorRecebido('');
         avisar('Caixa limpo para novo atendimento.');
       };
 
-      // Totais e Troco
+      // Totais e Troco com Programa de Fidelidade & Cashback
       const subtotal = itensCaixa.reduce((acc, it) => acc + (Number(it.preco) * Number(it.quantidade)), 0);
-      const totalFinal = Math.max(0, subtotal - (Number(desconto) || 0));
+      const valorDescontoCashback = (usarCashback && cashbackCliente) ? Math.min(Number(cashbackCliente.saldo_cashback) || 0, Math.max(0, subtotal - (Number(desconto) || 0))) : 0;
+      const totalFinal = Math.max(0, subtotal - (Number(desconto) || 0) - valorDescontoCashback);
       const troco = formaPagamento === 'Dinheiro' && Number(valorRecebido) > totalFinal ? Number(valorRecebido) - totalFinal : 0;
 
       // =====================================================================
@@ -1000,6 +1209,8 @@ function getPdvHtml() {
             id_pedido: comandaSelecionada ? comandaSelecionada.id_pedido : null,
             itens: itensCaixa,
             desconto: Number(desconto) || 0,
+            usar_cashback: usarCashback,
+            valor_cashback: valorDescontoCashback,
             forma_pagamento: formaPagamento === 'Dinheiro' ? 'Dinheiro Físico' : formaPagamento,
             valor_recebido: formaPagamento === 'Dinheiro' ? Number(valorRecebido) : totalFinal,
             troco: troco,
@@ -1057,7 +1268,7 @@ function getPdvHtml() {
             body: JSON.stringify({
               nome_completo: novoCliNome.trim(),
               cpf: cpfLimpo,
-              email: novoCliEmail.trim() || (novoCliNome.trim().toLowerCase().replace(/\s+/g, '.') + '@cliente.venus.com'),
+              email: novoCliEmail.trim() || (novoCliNome.trim().toLowerCase().replace(/[ ]+/g, '.') + '@cliente.venus.com'),
               telefone: novoCliTel.trim()
             })
           });
@@ -1541,6 +1752,18 @@ function getPdvHtml() {
                 <span>Vendas da Boutique</span>
               </button>
 
+              {/* Botão Impressão de Etiquetas de Código de Barras */}
+              <button
+                type="button"
+                id="btn-abrir-etiquetas"
+                onClick={() => setModalEtiquetasAberto(true)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-celestial-950 border border-ouro/50 hover:bg-ouro/20 text-ouro text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm whitespace-nowrap"
+                title="Imprimir etiquetas de código de barras EAN-13 (A4 ou Térmica Zebra/Argox)"
+              >
+                <span>🏷️</span>
+                <span>Etiquetas</span>
+              </button>
+
               {/* Botão Operadores & Permissões */}
               <button
                 type="button"
@@ -1906,6 +2129,19 @@ function getPdvHtml() {
                                 />
                               </div>
                             )}
+
+                            {/* Destaque VIP: Saldo de Cashback Haute Couture */}
+                            {cashbackCliente && (
+                              <div className="mt-1 pt-1 border-t border-ouro/20 flex items-center justify-between text-[10.5px]">
+                                <div className="flex items-center gap-1 text-ouro">
+                                  <span>💎</span>
+                                  <span className="font-bold">Fidelidade Haute Couture:</span>
+                                </div>
+                                <span className="font-mono font-bold text-amber-300">
+                                  {cashbackCliente.saldo_cashback > 0 ? (formatBRL(cashbackCliente.saldo_cashback) + ' disponível') : 'R$ 0,00'}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         );
                       })()
@@ -2068,8 +2304,35 @@ function getPdvHtml() {
                         className="w-20 bg-celestial-900 border border-ouro/30 rounded px-1.5 py-0.5 text-right text-xs text-ouro focus:outline-none focus:border-ouro"
                       />
                     </div>
+
+                    {/* Resgate de Saldo de Cashback se cliente tiver créditos */}
+                    {cashbackCliente && cashbackCliente.saldo_cashback > 0 && (
+                      <div className="p-1.5 rounded-lg bg-ouro/15 border border-ouro/35 flex items-center justify-between text-xs">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={usarCashback}
+                            onChange={e => setUsarCashback(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+                          />
+                          <div>
+                            <span className="font-bold text-ouro text-[10.5px] block leading-tight">💎 Resgatar Cashback</span>
+                            <span className="text-[9.5px] text-luar-200">Saldo: {formatBRL(cashbackCliente.saldo_cashback)}</span>
+                          </div>
+                        </label>
+                        {usarCashback && (
+                          <span className="font-mono font-bold text-xs text-emerald-400">
+                            -{formatBRL(valorDescontoCashback)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center pt-1 border-t border-ouro/20 font-bold">
-                      <span className="text-xs uppercase text-ouro/90">Total a Faturar:</span>
+                      <div className="text-left">
+                        <span className="text-xs uppercase text-ouro/90 block">Total a Faturar:</span>
+                        <span className="text-[9px] text-amber-300/80 font-normal">💎 Acumula +{formatBRL(totalFinal * 0.05)} (5% cashback)</span>
+                      </div>
                       <span className="text-base text-ouro font-serif" id="mostrador-total-final">
                         {formatBRL(totalFinal)}
                       </span>
@@ -2684,6 +2947,18 @@ function getPdvHtml() {
                                     </button>
                                   </div>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEtiquetasSelecionadas({ [p.id_produto]: Math.max(1, p.estoque || 1) });
+                                    setModalEtiquetasAberto(true);
+                                  }}
+                                  className="px-2 py-1.5 rounded-lg bg-celestial-900 border border-ouro/40 text-ouro hover:bg-ouro/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                  title="Imprimir etiquetas de código de barras desta peça"
+                                >
+                                  <span>🏷️</span>
+                                  <span>Etiqueta</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -3350,6 +3625,15 @@ function getPdvHtml() {
                     {cupomEmitido.desconto > 0 && (
                       <div className="flex justify-between text-rose-700"><span>Desconto Concedido:</span><span>- R$ {cupomEmitido.desconto.toFixed(2)}</span></div>
                     )}
+                    {cupomEmitido.desconto_cashback > 0 && (
+                      <div className="flex justify-between text-purple-700 font-bold"><span>💎 Resgate Cashback:</span><span>- R$ {cupomEmitido.desconto_cashback.toFixed(2)}</span></div>
+                    )}
+                    {cupomEmitido.cashback_gerado > 0 && (
+                      <div className="flex justify-between text-amber-800 font-bold"><span>💎 Cashback Gerado (5%):</span><span>+ R$ {cupomEmitido.cashback_gerado.toFixed(2)}</span></div>
+                    )}
+                    {cupomEmitido.saldo_cashback_total !== undefined && (
+                      <div className="flex justify-between text-stone-600"><span>💎 Saldo Atual Fidelidade:</span><span>R$ {cupomEmitido.saldo_cashback_total.toFixed(2)}</span></div>
+                    )}
                     <div className="flex justify-between font-bold text-sm border-t border-b border-stone-800 py-1">
                       <span>TOTAL FATURADO:</span><span>R$ {cupomEmitido.total.toFixed(2)}</span>
                     </div>
@@ -3402,8 +3686,12 @@ function getPdvHtml() {
                       const telLimpo = tel.replace(/[^0-9]/g, '');
                       if (!telLimpo) return;
                       const dddTel = telLimpo.length <= 11 ? (telLimpo.startsWith('55') ? telLimpo : '55' + telLimpo) : telLimpo;
-                      const itensTxt = (cupomEmitido.itens || []).map(it => '• ' + it.quantidade + 'x ' + it.nome + ' - R$ ' + ((it.preco || 0) * it.quantidade).toFixed(2)).join('\n');
-                      const msg = '✨ *VÊNUS & LUAR BOUTIQUE* ✨\n🧾 *Cupom Fiscal / PDV:* #' + (cupomEmitido.numero_fatura || cupomEmitido.numero_cupom) + '\n📅 *Data:* ' + cupomEmitido.data_hora_formatada + '\n👤 *Cliente:* ' + cupomEmitido.cliente + ' (CPF: ' + cupomEmitido.cpf + ')\n━━━━━━━━━━━━━━━━━━━━\n🛍️ *ITENS COMPRADOS:*\n' + itensTxt + '\n━━━━━━━━━━━━━━━━━━━━\n💳 *Pagamento:* ' + cupomEmitido.forma_pagamento + '\n💰 *Total:* R$ ' + Number(cupomEmitido.total || 0).toFixed(2) + '\n🔐 *Autenticação:* ' + (cupomEmitido.chave_autenticacao || '').substring(0, 24) + '...\n\n_Agradecemos sua preferência na Vênus & Luar Boutique!_';
+                      const itensTxt = (cupomEmitido.itens || []).map(it => '• ' + it.quantidade + 'x ' + (it.nome || it.nome_item) + ' - R$ ' + ((it.preco || 0) * it.quantidade).toFixed(2)).join('\n');
+                      let cashbackMsg = '';
+                      if (cupomEmitido.cashback_gerado > 0) {
+                        cashbackMsg = '\n━━━━━━━━━━━━━━━━━━━━\n💎 *FIDELIDADE HAUTE COUTURE:*\n• Cashback acumulado: +R$ ' + Number(cupomEmitido.cashback_gerado || 0).toFixed(2) + ' (5%)\n• Saldo disponível para próxima compra: R$ ' + Number(cupomEmitido.saldo_cashback_total || 0).toFixed(2);
+                      }
+                      const msg = '✨ *VÊNUS & LUAR BOUTIQUE* ✨\n🧾 *Cupom Fiscal / PDV:* #' + (cupomEmitido.numero_fatura || cupomEmitido.numero_cupom) + '\n📅 *Data:* ' + cupomEmitido.data_hora_formatada + '\n👤 *Cliente:* ' + cupomEmitido.cliente + ' (CPF: ' + cupomEmitido.cpf + ')\n━━━━━━━━━━━━━━━━━━━━\n🛍️ *ITENS COMPRADOS:*\n' + itensTxt + '\n━━━━━━━━━━━━━━━━━━━━\n💳 *Pagamento:* ' + cupomEmitido.forma_pagamento + '\n💰 *Total Pago:* R$ ' + Number(cupomEmitido.total || 0).toFixed(2) + cashbackMsg + '\n🔐 *Autenticação:* ' + (cupomEmitido.chave_autenticacao || '').substring(0, 24) + '...\n\n_Agradecemos sua preferência na Vênus & Luar Boutique!_';
                       window.open('https://wa.me/' + dddTel + '?text=' + encodeURIComponent(msg), '_blank');
                     }}
                     className="flex-1 min-w-[120px] py-2.5 rounded-xl bg-emerald-700 text-white hover:bg-emerald-600 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
@@ -3873,39 +4161,76 @@ function getPdvHtml() {
                               <p className="text-[11px] text-luar-100 font-semibold mt-1">
                                 👤 {p.nome_cliente || 'Mesa / Balcão'}
                               </p>
+                              {(p.telefone_cliente || p.telefone) && (
+                                <p className="text-[10px] text-emerald-400 font-mono">
+                                  📞 {formatarTelefone(p.telefone_cliente || p.telefone)}
+                                </p>
+                              )}
+                              <p className="text-[9.5px] text-stone-400">
+                                📍 {p.local_consumo || 'Bistrô / Balcão'}
+                              </p>
                               <div className="mt-2 space-y-1 text-xs">
                                 {(p.itens || []).map((it, idx) => (
                                   <div key={idx} className="flex justify-between items-center text-[11px] text-stone-200">
-                                    <span><strong>{it.quantidade}x</strong> {it.nome}</span>
+                                    <span><strong>{it.quantidade}x</strong> {it.nome || it.nome_item}</span>
                                   </div>
                                 ))}
                               </div>
                             </div>
 
-                            {/* Controles do Barista */}
-                            <div className="pt-2 border-t border-ouro/15 flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => atualizarStatusKds(p.id_pedido, 'em_preparo')}
-                                className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'em_preparo' ? 'bg-blue-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
-                              >
-                                🔥 Preparar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => atualizarStatusKds(p.id_pedido, 'pronto')}
-                                className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'pronto' ? 'bg-emerald-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
-                              >
-                                ✅ Pronto
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => atualizarStatusKds(p.id_pedido, 'entregue')}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-celestial-900 text-stone-400 hover:text-stone-200 transition-all cursor-pointer"
-                                title="Marcar como entregue ao cliente"
-                              >
-                                🍽️
-                              </button>
+                            {/* Controles do Barista e Notificação WhatsApp */}
+                            <div className="space-y-1.5 pt-2 border-t border-ouro/15">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => atualizarStatusKds(p.id_pedido, 'em_preparo')}
+                                  className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'em_preparo' ? 'bg-blue-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
+                                >
+                                  🔥 Preparar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => atualizarStatusKds(p.id_pedido, 'pronto')}
+                                  className={"flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer " + (st === 'pronto' ? 'bg-emerald-600 text-white' : 'bg-celestial-900 text-stone-300 hover:text-white')}
+                                >
+                                  ✅ Pronto
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => atualizarStatusKds(p.id_pedido, 'entregue')}
+                                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-celestial-900 text-stone-400 hover:text-stone-200 transition-all cursor-pointer"
+                                  title="Marcar como entregue ao cliente"
+                                >
+                                  🍽️
+                                </button>
+                              </div>
+
+                              {st === 'pronto' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const tel = (p.telefone_cliente || p.telefone || '').replace(/[^0-9]/g, '');
+                                    const dddTel = tel.length === 11 ? ('55' + tel) : (tel.startsWith('55') ? tel : ('55' + tel));
+                                    const itensTxt = (p.itens || []).map(it => '• ' + it.quantidade + 'x ' + (it.nome || it.nome_item)).join('\n');
+                                    const msg = '✨ *VÊNUS & LUAR BOUTIQUE & BISTRÔ* ✨\n\n☕ *Seu pedido #' + (p.numero_comanda || p.numero_fatura || p.id_pedido) + ' está PRONTO!*\n\nOlá, *' + (p.nome_cliente || 'Estimado(a) Cliente') + '*! Seu pedido do Bistrô acabou de ficar pronto e quentinho.\n\n📍 *Local:* ' + (p.local_consumo || 'Balcão / Mesa Bistrô') + '\n🧁 *Itens:*\n' + itensTxt + '\n\n_Aguardamos você para degustar! Se desejar algo mais, é só nos chamar._ ✨';
+                                    if (tel.length >= 10) {
+                                      window.open('https://wa.me/' + dddTel + '?text=' + encodeURIComponent(msg), '_blank');
+                                    } else {
+                                      const telManual = prompt('Informe o WhatsApp do cliente com DDD (apenas números):', '');
+                                      if (telManual) {
+                                        const tLimpo = telManual.replace(/[^0-9]/g, '');
+                                        const tF = tLimpo.length <= 11 ? ('55' + tLimpo) : tLimpo;
+                                        window.open('https://wa.me/' + tF + '?text=' + encodeURIComponent(msg), '_blank');
+                                      }
+                                    }
+                                  }}
+                                  className="w-full py-1.5 rounded-lg text-[10px] font-bold bg-emerald-700/80 hover:bg-emerald-600 text-white transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                                  title="Enviar aviso de pedido pronto via WhatsApp"
+                                >
+                                  <span>📲</span>
+                                  <span>Avisar Cliente no WhatsApp</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -3916,6 +4241,234 @@ function getPdvHtml() {
               </div>
             </div>
           )}
+
+          {/* ======================================================== */}
+          {/* MODAL: IMPRESSÃO DE ETIQUETAS DE CÓDIGO DE BARRAS (EAN-13) */}
+          {/* ======================================================== */}
+          {modalEtiquetasAberto && (
+            <div id="modal-etiquetas" className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 nao-imprimir animate-fadeIn">
+              <div className="bg-celestial-900 border border-ouro/40 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col p-4 shadow-2xl overflow-hidden text-left">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-ouro/20 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🏷️</span>
+                    <div>
+                      <h3 className="font-serif text-base font-bold gold-gradient-text tracking-wide">
+                        Impressão de Etiquetas de Código de Barras EAN-13
+                      </h3>
+                      <p className="text-[11px] text-luar-300">
+                        Gere folhas A4 adesivas ou rolos térmicos (Zebra / Argox) para araras de roupas, caixas de joias e balcão.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalEtiquetasAberto(false)}
+                    className="w-8 h-8 rounded-full bg-celestial-950 border border-ouro/30 text-ouro hover:text-white flex items-center justify-center text-lg font-bold cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Opções de Formato e Ações */}
+                <div className="py-2.5 flex items-center justify-between gap-3 flex-wrap border-b border-ouro/15 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase text-ouro">Formato:</span>
+                    <button
+                      type="button"
+                      onClick={() => setFormatoEtiqueta('a4')}
+                      className={"px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer " + (formatoEtiqueta === 'a4' ? 'bg-ouro text-celestial-950 font-extrabold' : 'bg-celestial-950 border border-ouro/30 text-luar-200')}
+                    >
+                      📄 Folha A4 Adesiva (3x10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormatoEtiqueta('termica')}
+                      className={"px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer " + (formatoEtiqueta === 'termica' ? 'bg-ouro text-celestial-950 font-extrabold' : 'bg-celestial-950 border border-ouro/30 text-luar-200')}
+                    >
+                      🏷️ Rolo Térmico (Zebra/Argox 50x30mm)
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const todas = {};
+                        produtos.forEach(p => { todas[p.id_produto] = Math.max(1, p.estoque || 1); });
+                        setEtiquetasSelecionadas(todas);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-celestial-950 border border-ouro/30 text-luar-200 hover:text-ouro text-xs font-bold cursor-pointer"
+                    >
+                      Marcar Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEtiquetasSelecionadas({})}
+                      className="px-2.5 py-1 rounded-lg bg-celestial-950 border border-rose-500/30 text-rose-300 hover:bg-rose-950/40 text-xs font-bold cursor-pointer"
+                    >
+                      Desmarcar Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-ouro text-celestial-950 font-extrabold text-xs uppercase tracking-wider shadow-lg hover:brightness-110 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <span>🖨️</span>
+                      <span>Imprimir Etiquetas</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conteúdo: Lista de Produtos e Live Preview */}
+                <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-3 py-2.5 overflow-hidden">
+                  {/* Coluna Esquerda: Seleção de Peças e Quantidades */}
+                  <div className="md:col-span-5 bg-celestial-950/70 border border-ouro/20 rounded-xl p-3 flex flex-col min-h-0">
+                    <span className="text-[11px] font-bold uppercase text-ouro/80 mb-2 block">
+                      Selecione as Peças e Cópias ({Object.keys(etiquetasSelecionadas).filter(k => etiquetasSelecionadas[k] > 0).length} selecionadas):
+                    </span>
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                      {produtos.map(p => {
+                        const qtd = etiquetasSelecionadas[p.id_produto] || 0;
+                        const selecionado = qtd > 0;
+                        return (
+                          <div
+                            key={p.id_produto}
+                            className={"p-2 rounded-xl border transition-all flex items-center justify-between gap-2 " + (selecionado ? 'bg-ouro/10 border-ouro/50' : 'bg-celestial-900/60 border-ouro/10 opacity-75')}
+                          >
+                            <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={selecionado}
+                                onChange={e => {
+                                  const novo = { ...etiquetasSelecionadas };
+                                  if (e.target.checked) {
+                                    novo[p.id_produto] = Math.max(1, p.estoque || 1);
+                                  } else {
+                                    delete novo[p.id_produto];
+                                  }
+                                  setEtiquetasSelecionadas(novo);
+                                }}
+                                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-luar-100 truncate">{p.nome_item || p.nome}</div>
+                                <div className="text-[10px] text-ouro font-mono">{formatBRL(p.preco)} • EAN: {p.codigo_barras || ('7891234' + String(p.id_produto).padStart(5, '0'))}</div>
+                              </div>
+                            </label>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-[10px] text-stone-400">Qtd:</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={qtd || 1}
+                                onChange={e => {
+                                  const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                  setEtiquetasSelecionadas({ ...etiquetasSelecionadas, [p.id_produto]: val });
+                                }}
+                                className="w-12 bg-celestial-950 border border-ouro/30 rounded px-1 py-0.5 text-center text-xs text-ouro focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Coluna Direita: Live Preview da Impressão */}
+                  <div className="md:col-span-7 bg-stone-900/90 border border-ouro/30 rounded-xl p-3 flex flex-col min-h-0">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 shrink-0">
+                      <span className="text-[11px] font-bold uppercase text-amber-300">
+                        Pré-visualização em Tempo Real ({formatoEtiqueta === 'a4' ? 'Folha A4 3x10' : 'Rolo Térmico 50x30mm'}):
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-mono">GS1 EAN-13 Vetorial</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-3 bg-stone-950/80 rounded-lg flex flex-wrap gap-3 items-start justify-center">
+                      {Object.keys(etiquetasSelecionadas).filter(k => etiquetasSelecionadas[k] > 0).length === 0 ? (
+                        <div className="text-center py-12 text-stone-400 text-xs">
+                          Nenhuma peça selecionada. Marque as peças ao lado para gerar as etiquetas de código de barras.
+                        </div>
+                      ) : (
+                        Object.keys(etiquetasSelecionadas).filter(k => etiquetasSelecionadas[k] > 0).map(idProd => {
+                          const prod = produtos.find(p => p.id_produto === Number(idProd));
+                          if (!prod) return null;
+                          const qtd = etiquetasSelecionadas[idProd] || 1;
+                          const cod = prod.codigo_barras || ('7891234' + String(prod.id_produto).padStart(5, '0'));
+                          const ref = (prod.categoria || 'MODA').toUpperCase().slice(0, 4) + '-' + String(prod.id_produto).padStart(3, '0');
+                          const tam = prod.atributos?.tamanho || prod.atributos?.tamanho_pet || (prod.atributos?.volume_ml ? (prod.atributos.volume_ml + 'ml') : 'Único');
+
+                          return Array.from({ length: Math.min(qtd, 6) }).map((_, idx) => (
+                            <div
+                              key={idProd + '-' + idx}
+                              className="bg-white text-black rounded shadow-md border border-stone-300 p-2 flex flex-col justify-between"
+                              style={{ width: formatoEtiqueta === 'a4' ? '210px' : '190px', minHeight: '115px' }}
+                            >
+                              <div className="text-center border-b border-stone-200 pb-1">
+                                <div className="text-[9px] font-bold text-amber-900 tracking-wider">✨ VÊNUS &amp; LUAR BOUTIQUE</div>
+                                <div className="text-[10.5px] font-bold text-stone-900 leading-tight truncate mt-0.5">{prod.nome_item || prod.nome}</div>
+                                <div className="text-[8.5px] text-stone-600 flex justify-between px-1 mt-0.5">
+                                  <span>Tam: {tam}</span>
+                                  <span>Ref: {ref}</span>
+                                </div>
+                              </div>
+
+                              <div className="py-1 flex flex-col items-center justify-center">
+                                <GerarCodigoBarrasSvg codigo={cod} />
+                              </div>
+
+                              <div className="border-t border-stone-200 pt-0.5 flex justify-between items-center px-1">
+                                <span className="text-[8px] uppercase tracking-wider text-stone-500">Preço Oficial</span>
+                                <span className="text-xs font-serif font-black text-amber-950">{formatBRL(prod.preco)}</span>
+                              </div>
+                            </div>
+                          ));
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* ÁREA EXCLUSIVA DE IMPRESSÃO DE ETIQUETAS (@media print) */}
+          {/* ======================================================== */}
+          <div id="area-etiquetas-impressao" style={{ display: 'none' }}>
+            <div className={formatoEtiqueta === 'a4' ? 'grade-a4' : 'rolo-termico'}>
+              {Object.keys(etiquetasSelecionadas).map(idProd => {
+                const prod = produtos.find(p => p.id_produto === Number(idProd));
+                if (!prod) return null;
+                const qtd = etiquetasSelecionadas[idProd] || 1;
+                const cod = prod.codigo_barras || ('7891234' + String(prod.id_produto).padStart(5, '0'));
+                const ref = (prod.categoria || 'MODA').toUpperCase().slice(0, 4) + '-' + String(prod.id_produto).padStart(3, '0');
+                const tam = prod.atributos?.tamanho || prod.atributos?.tamanho_pet || (prod.atributos?.volume_ml ? (prod.atributos.volume_ml + 'ml') : 'Único');
+
+                return Array.from({ length: qtd }).map((_, idx) => (
+                  <div key={idProd + '-' + idx} className="etiqueta-print-card">
+                    <div style={{ textAlign: 'center', borderBottom: '1px solid #ccc', paddingBottom: '2px', marginBottom: '2px' }}>
+                      <div style={{ fontSize: '8pt', fontWeight: 'bold', color: '#854d0e', letterSpacing: '0.5px' }}>✨ VÊNUS &amp; LUAR BOUTIQUE</div>
+                      <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prod.nome_item || prod.nome}</div>
+                      <div style={{ fontSize: '7.5pt', color: '#444', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Tam: {tam}</span>
+                        <span>Ref: {ref}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center', margin: '2px 0' }}>
+                      <GerarCodigoBarrasSvg codigo={cod} />
+                    </div>
+                    <div style={{ borderTop: '1px solid #ccc', paddingTop: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '7pt', textTransform: 'uppercase', color: '#555' }}>Preço Venda</span>
+                      <span style={{ fontSize: '10pt', fontWeight: '900', color: '#000' }}>{formatBRL(prod.preco)}</span>
+                    </div>
+                  </div>
+                ));
+              })}
+            </div>
+          </div>
 
           {/* Notificação Toast */}
           {notificacao && (
@@ -4228,9 +4781,39 @@ const server = http.createServer((req, res) => {
 
   // GET /api/pdv/produtos
   if (pathname === '/api/pdv/produtos' && req.method === 'GET') {
-    const prods = carregarJson(PRODUCTS_FILE, []);
+    const prods = carregarJson(PRODUCTS_FILE, []).map(p => ({
+      ...p,
+      codigo_barras: p.codigo_barras || gerarEan13(p.id_produto)
+    }));
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(prods));
+    return;
+  }
+
+  // GET /api/pdv/etiquetas (DADOS PARA IMPRESSÃO DE ETIQUETAS EAN-13 ZEBRA/ARGOX/A4)
+  if (pathname === '/api/pdv/etiquetas' && req.method === 'GET') {
+    const produtos = carregarJson(PRODUCTS_FILE, []);
+    const produtosComEtiqueta = produtos.map(p => ({
+      id_produto: p.id_produto,
+      nome_item: p.nome_item,
+      categoria: p.categoria,
+      preco: p.preco,
+      estoque: p.estoque,
+      tamanho: p.atributos?.tamanho || p.atributos?.tamanho_pet || (p.atributos?.volume_ml ? `${p.atributos.volume_ml}ml` : 'Único'),
+      codigo_barras: p.codigo_barras || gerarEan13(p.id_produto),
+      referencia: `${(p.categoria || 'MODA').toUpperCase().slice(0, 4)}-${String(p.id_produto).padStart(3, '0')}`
+    }));
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ sucesso: true, produtos: produtosComEtiqueta }));
+    return;
+  }
+
+  // GET /api/pdv/fidelidade (CONSULTA DE SALDO DE CASHBACK DO CLIENTE PF)
+  if (pathname === '/api/pdv/fidelidade' && req.method === 'GET') {
+    const cpfParam = (parsedUrl.query.cpf || '').replace(/[^0-9]/g, '');
+    const fidelidade = obterFidelidadeCliente(cpfParam);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ sucesso: true, fidelidade }));
     return;
   }
 
@@ -4258,6 +4841,7 @@ const server = http.createServer((req, res) => {
           categoria: categoria || 'Moda',
           preco: Number(Number(preco).toFixed(2)),
           estoque: ehAlimento ? 0 : Math.max(0, parseInt(estoque || '10', 10)),
+          codigo_barras: gerarEan13(novoId),
           imagem_url: (imagem_url || '').trim() || (categoria === 'Moda'
             ? 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=800&q=80'
             : (categoria === 'Pet'
@@ -4660,8 +5244,40 @@ const server = http.createServer((req, res) => {
         }
         ped.status_kds = status_kds; // 'na_fila' | 'em_preparo' | 'pronto' | 'entregue'
         salvarJson(ORDERS_FILE, pedidos);
+
+        let whatsappUrl = null;
+        let whatsappMsg = null;
+        let telFormatado = null;
+
+        // Se o status for alterado para 'pronto', prepara o link e texto de notificação WhatsApp
+        let tel = ped.telefone_cliente || ped.telefone;
+        if (!tel && ped.cpf_cliente) {
+          const cpfDigs = String(ped.cpf_cliente).replace(/[^0-9]/g, '');
+          const usuarios = carregarJson(USERS_FILE, []);
+          const u = usuarios.find(user => (user.cpf || '').replace(/[^0-9]/g, '') === cpfDigs);
+          if (u && u.telefone) tel = u.telefone;
+        }
+
+        if (tel) {
+          const telDigits = String(tel).replace(/[^0-9]/g, '');
+          if (telDigits.length >= 10) {
+            telFormatado = telDigits.length === 11 ? `55${telDigits}` : (telDigits.startsWith('55') ? telDigits : `55${telDigits}`);
+            const itensTxt = (ped.itens || []).map(it => `• ${it.quantidade}x ${it.nome || it.nome_item}`).join('\n');
+            const numPed = ped.numero_comanda || ped.numero_fatura || ped.id_pedido;
+            const local = ped.local_consumo || 'Balcão / Mesa Bistrô';
+            whatsappMsg = `✨ *VÊNUS & LUAR BOUTIQUE & BISTRÔ* ✨\n\n☕ *Seu pedido #${numPed} está PRONTO!*\n\nOlá, *${ped.nome_cliente || 'Estimado(a) Cliente'}*! Seu pedido da cafeteria & bistrô acabou de ficar pronto e quentinho.\n\n📍 *Local de Entrega:* ${local}\n🧁 *Itens:* \n${itensTxt}\n\n_Aguardamos você para degustar! Se desejar algo mais, é só nos chamar._ ✨`;
+            whatsappUrl = `https://wa.me/${telFormatado}?text=${encodeURIComponent(whatsappMsg)}`;
+          }
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ sucesso: true, pedido: ped }));
+        res.end(JSON.stringify({
+          sucesso: true,
+          pedido: ped,
+          whatsapp_url: whatsappUrl,
+          mensagem_whatsapp: whatsappMsg,
+          telefone_destino: telFormatado
+        }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ erro: 'Erro ao atualizar status KDS.' }));
@@ -4745,16 +5361,21 @@ const server = http.createServer((req, res) => {
         salvarJson(PRODUCTS_FILE, produtos);
 
         // 4. Cálculos Financeiros e Geração da Fatura Oficial
+        const pedidos = carregarJson(ORDERS_FILE, []);
+        const numeroFatura = 'FAT-PDV-2026-' + (1000 + pedidos.length + 1);
+        const numeroCupom = 'CUPOM-PDV-2026-' + (1000 + pedidos.length + 1);
+
         const subtotal = itens.reduce((acc, it) => acc + (Number(it.preco) * Number(it.quantidade)), 0);
         const descValor = Number(desconto) || 0;
-        const totalFinal = Math.max(0, subtotal - descValor);
+        let descontoCashback = 0;
+        if (dados.usar_cashback && dados.valor_cashback) {
+          const resgate = resgatarCashbackCliente(cpfLimpo, Number(dados.valor_cashback), numeroFatura);
+          descontoCashback = resgate.resgatado;
+        }
+        const totalFinal = Math.max(0, subtotal - descValor - descontoCashback);
         const operadorNome = nome_operador || 'Mileny Gabriely';
         const dataVenda = getBrasiliaIsoString();
         const dataVendaFormatada = formatarDataHoraBrasilia(dataVenda);
-        const pedidos = carregarJson(ORDERS_FILE, []);
-
-        const numeroFatura = 'FAT-PDV-2026-' + (1000 + pedidos.length + 1);
-        const numeroCupom = 'CUPOM-PDV-2026-' + (1000 + pedidos.length + 1);
         const chaveAutenticacao = crypto.createHash('sha256')
           .update(`${numeroFatura}:${totalFinal}:${dataVenda}:${cpfLimpo}:${operadorNome}`)
           .digest('hex').toUpperCase();
@@ -4999,6 +5620,13 @@ const server = http.createServer((req, res) => {
           salvarJson(USERS_FILE, usuarios);
         }
 
+        // Creditar 5% de Cashback Haute Couture sobre o total líquido pago
+        const creditoCashback = creditarCashbackCliente(cpfLimpo, nome_cliente.trim(), totalFinal, numeroFatura);
+        pedidoAtualizado.desconto_cashback = descontoCashback;
+        pedidoAtualizado.cashback_gerado = creditoCashback.creditado;
+        pedidoAtualizado.saldo_cashback_pos_venda = creditoCashback.saldo;
+        salvarJson(ORDERS_FILE, pedidos);
+
         const cupomPdv = {
           numero_fatura: numeroFatura,
           numero_cupom: numeroCupom,
@@ -5013,6 +5641,9 @@ const server = http.createServer((req, res) => {
           itens: pedidoAtualizado.itens,
           subtotal: Number(subtotal.toFixed(2)),
           desconto: descValor,
+          desconto_cashback: descontoCashback,
+          cashback_gerado: creditoCashback.creditado,
+          saldo_cashback_total: creditoCashback.saldo,
           total: Number(totalFinal.toFixed(2)),
           forma_pagamento: pedidoAtualizado.forma_pagamento,
           valor_recebido: Number(valor_recebido) || totalFinal,

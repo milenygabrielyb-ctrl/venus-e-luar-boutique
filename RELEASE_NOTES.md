@@ -33,7 +33,37 @@ timeline
         v2.2.0 : Autenticação & Cadastro Inicial : Padronização Pessoa Física (CPF)
         v2.3.0 : Correção Fuso Horário UTC-3 : Cadastro Ágil de Clientes no Caixa
         v2.4.0 : Suíte Avançada de Varejo : WhatsApp, Caixa Turno, Bip EAN-13, KDS, DRE & Render
+        v2.5.0 : Expansão de Luxo : Etiquetas EAN-13, Fidelidade Cashback & WhatsApp KDS
 ```
+
+---
+
+### [v2.5.0] - 2026-11-19 • *Impressão de Etiquetas EAN-13, Fidelidade Haute Couture & Notificação WhatsApp KDS*
+
+#### 🚀 Novas Funcionalidades
+- **🏷️ Impressão de Etiquetas de Código de Barras EAN-13 (GS1 Vetorial)**:
+  - Motor vetorial nativo em **Pure SVG** (zero bibliotecas externas), gerando barras nítidas e legíveis para qualquer leitor óptico.
+  - Cálculo automático do dígito verificador módulo 10 e atribuição de códigos no padrão nacional `7891234XXXXXC`.
+  - Suporte a múltiplos formatos de impressão:
+    - **📄 Folha A4 Adesiva (Grade 3x10)**: Padrão Pimaco / Colacril / Maxprint para araras e prateleiras.
+    - **🏷️ Rolo Térmico Individual (50x30mm e 40x25mm)**: Para impressoras térmicas industriais (Zebra, Argox, Elgin, Datamax).
+  - Identidade visual de luxo: logotipo dourado *✨ Vênus & Luar Boutique*, nome da peça, grade/tamanho, referência interna e preço de venda destacado.
+  - Seletor de quantidade flexível: impressão em lote ou quantidade igual ao saldo atual em estoque.
+  - Atalho dedicado no cabeçalho do PDV (`[ 🏷️ Etiquetas ]`) e botão rápido `[ 🏷️ Etiqueta ]` em cada linha do catálogo de produtos.
+
+- **💎 Programa de Fidelidade & Cashback Haute Couture**:
+  - Motor financeiro que credita automaticamente **5% do valor líquido pago** como saldo de cashback para clientes Pessoa Física (CPF).
+  - Válido em todos os canais: PDV Balcão Físico (`POST /api/pdv/faturar`) e E-commerce Online (`POST /api/pedidos/faturar`).
+  - Reconhecimento automático no **Passo 1 do PDV**: ao selecionar o cliente, exibe selo VIP dourado com o saldo disponível em tempo real.
+  - Opção de resgate no **Passo 3 (Pagamento)**: caixa de seleção para abater o saldo de créditos diretamente do total da compra.
+  - Persistência e auditoria completa em `data/fidelidade.json` com extrato de movimentações (créditos e resgates).
+  - Destaque nos comprovantes: Cupom fiscal 80mm e mensagem de WhatsApp exibem o cashback gerado na compra e o saldo total atualizado.
+
+- **📱 Notificação de Pedido Pronto via WhatsApp para Mesas e Balcão (KDS)**:
+  - Disparo de aviso elegante via WhatsApp quando o barista/copa marca o pedido como `✅ Pronto` no monitor KDS.
+  - Captura inteligente do telefone celular do cliente no pedido do bistrô ou cadastro de usuários.
+  - Geração de mensagem formatada contendo número da comanda, itens quentinhos preparados, mesa/balcão de entrega e assinatura da boutique.
+  - Botão de ação direta `[ 📲 Avisar Cliente no WhatsApp ]` em cada cartão do KDS para reenvio ágil.
 
 ---
 

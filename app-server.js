@@ -11348,6 +11348,47 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           criado_em: getBrasiliaIsoString()
         };
 
+        // Creditar 5% de Cashback no Programa de Fidelidade Haute Couture
+        let cashbackGerado = 0;
+        let saldoCashbackAtual = 0;
+        try {
+          const fidPath = path.join(__dirname, 'data', 'fidelidade.json');
+          let fidMap = {};
+          if (fs.existsSync(fidPath)) {
+            fidMap = JSON.parse(fs.readFileSync(fidPath, 'utf8'));
+          }
+          if (!fidMap[cpfLimpo]) {
+            fidMap[cpfLimpo] = {
+              cpf: cpfLimpo,
+              nome_cliente: novoPedidoFaturado.nome_cliente,
+              saldo_cashback: 0,
+              total_acumulado: 0,
+              total_resgatado: 0,
+              historico: []
+            };
+          }
+          const f = fidMap[cpfLimpo];
+          cashbackGerado = Number((novoPedidoFaturado.total * 0.05).toFixed(2));
+          f.saldo_cashback = Number(((f.saldo_cashback || 0) + cashbackGerado).toFixed(2));
+          f.total_acumulado = Number(((f.total_acumulado || 0) + cashbackGerado).toFixed(2));
+          f.nome_cliente = novoPedidoFaturado.nome_cliente || f.nome_cliente;
+          f.atualizado_em = getBrasiliaIsoString();
+          if (!f.historico) f.historico = [];
+          f.historico.unshift({
+            data: getBrasiliaIsoString(),
+            tipo: 'CREDITO',
+            valor: cashbackGerado,
+            pedido: numeroFatura,
+            descricao: `Cashback 5% da compra online ${numeroFatura}`
+          });
+          fs.writeFileSync(fidPath, JSON.stringify(fidMap, null, 2), 'utf8');
+          saldoCashbackAtual = f.saldo_cashback;
+        } catch (eFid) {
+          console.error('Erro ao creditar cashback na compra online:', eFid);
+        }
+        novoPedidoFaturado.cashback_gerado = cashbackGerado;
+        novoPedidoFaturado.saldo_cashback_total = saldoCashbackAtual;
+
         pedidos.unshift(novoPedidoFaturado);
         salvarPedidosNoDisco();
 
@@ -11373,6 +11414,8 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
             total: novoPedidoFaturado.total,
             valor_total: novoPedidoFaturado.total,
             forma_pagamento: novoPedidoFaturado.forma_pagamento,
+            cashback_gerado: cashbackGerado,
+            saldo_cashback_total: saldoCashbackAtual,
             status: 'FATURADO & PAGO COM SUCESSO'
           }
         }));
@@ -11384,13 +11427,33 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
     return;
   }
 
+  // GET /api/fidelidade (CONSULTA DE SALDO DE CASHBACK DO PROGRAMA DE FIDELIDADE HAUTE COUTURE)
+  if (pathname === '/api/fidelidade' && req.method === 'GET') {
+    const cpfParam = (parsedUrl.query.cpf || '').replace(/[^0-9]/g, '');
+    const fidPath = path.join(__dirname, 'data', 'fidelidade.json');
+    let fidMap = {};
+    if (fs.existsSync(fidPath)) {
+      try { fidMap = JSON.parse(fs.readFileSync(fidPath, 'utf8')); } catch (_) {}
+    }
+    const f = fidMap[cpfParam] || {
+      cpf: cpfParam,
+      saldo_cashback: 0,
+      total_acumulado: 0,
+      total_resgatado: 0,
+      historico: []
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ sucesso: true, fidelidade: f }));
+    return;
+  }
+
   // POST /api/bistro/pedidos (PEDIDO DE CAFETERIA & BISTRÔ - SEM COBRANÇA ONLINE, PAGAMENTO DIRETO NO CAIXA)
   if (pathname === '/api/bistro/pedidos' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { id_usuario, nome_cliente, local_consumo, observacoes, itens } = JSON.parse(body);
+        const { id_usuario, nome_cliente, local_consumo, observacoes, itens, telefone, telefone_cliente } = JSON.parse(body);
 
         if (!itens || !Array.isArray(itens) || itens.length === 0) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -11398,7 +11461,9 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           return;
         }
 
-        const nome = (nome_cliente || 'Cliente Bistrô').trim();
+        const usuarioRef = id_usuario ? usuarios.find(u => u.id_usuario === id_usuario) : null;
+        const telCliente = telefone || telefone_cliente || (usuarioRef ? usuarioRef.telefone : null);
+        const nome = (nome_cliente || (usuarioRef ? usuarioRef.nome_completo : 'Cliente Bistrô')).trim();
         const total = itens.reduce((acc, item) => acc + (Number(item.preco) * Number(item.quantidade)), 0);
         const numeroComanda = `BISTRO-${1000 + pedidos.length + 1}`;
         const chaveAutenticacao = crypto.createHash('sha256')
@@ -11416,6 +11481,7 @@ Olá! Uma nova candidatura de adoção responsável foi registrada para o pet *$
           chave_autenticacao: chaveAutenticacao,
           id_usuario: id_usuario || null,
           nome_cliente: nome,
+          telefone_cliente: telCliente || null,
           cpf_cliente: 'Pagamento no Caixa',
           total: Number(total.toFixed(2)),
           itens,

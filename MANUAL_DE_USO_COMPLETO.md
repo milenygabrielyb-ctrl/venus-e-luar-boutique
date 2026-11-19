@@ -131,19 +131,75 @@ No rodapé do Cupom de 80mm gerado:
 
 ---
 
-## ☕ 4. Monitor da Copa & Bistrô (KDS - Kitchen Display System)
+## ☕ 4. Monitor da Copa & Bistrô (KDS) & Notificações WhatsApp
 
 Para uso do barista e da equipe da copa/cozinha:
 1. No cabeçalho do PDV, clique em **[ ☕ KDS Copa ]**.
-2. O painel exibe todos os pedidos em aberto contendo itens de cafeteria.
-3. O barista avança os cartões conforme o preparo:
+2. O painel exibe todos os pedidos em aberto contendo itens de cafeteria e bistrô.
+3. Cada cartão identifica o número da comanda, cliente, **telefone celular**, local de consumo (**Mesa ou Balcão**) e os itens pedidos.
+4. O barista avança os cartões conforme o preparo:
    - Clique em **"🔥 Preparar"** ao moer o café ou iniciar a montagem do prato (o cartão fica azul).
-   - Clique em **"✅ Pronto"** quando o pedido estiver finalizado na bancada (o cartão fica verde, avisando a atendente que pode servir).
-   - Clique em **"🍽️"** após a entrega na mesa para arquivar o pedido.
+   - Clique em **"✅ Pronto"** quando o pedido estiver finalizado na bancada:
+     - O sistema identifica o WhatsApp da cliente ou mesa e **prepara automaticamente a mensagem de notificação**.
+     - Se o navegador permitir pop-ups, a janela do WhatsApp abre de imediato com a mensagem pronta avisando que o café/croissant está pronto e quentinho!
+   - **Botão de Ação Manual [ 📲 Avisar Cliente no WhatsApp ]**: Presente em cada comanda com status *Pronto*, permite reenviar ou encaminhar a notificação a qualquer instante.
+   - Clique em **"🍽️"** após a entrega na mesa para arquivar o pedido do monitor.
 
 ---
 
-## 📊 5. Monitor de Vendas & Relatório DRE (Para Gerência e Proprietária)
+## 🏷️ 5. Módulo de Impressão de Etiquetas de Código de Barras (EAN-13)
+
+Desenvolvido para araras de roupas de alta costura, caixas de joias e embalagens de presentes da boutique:
+
+1. **Acesso ao Módulo de Etiquetas**:
+   - Clique no botão **[ 🏷️ Etiquetas ]** no cabeçalho do PDV, ou
+   - Clique no ícone de etiqueta `🏷️` ao lado de qualquer peça na lista de produtos.
+2. **Escolha do Formato de Impressão**:
+   - **📄 Folha A4 Adesiva (Grade 3x10 - 30 etiquetas por folha)**: Padrão Pimaco / Colacril / Maxprint para impressoras laser ou jato de tinta convencionais.
+   - **🏷️ Rolo Térmico Individual (50x30mm)**: Padrão para impressoras térmicas de etiquetas (Zebra TLP 2844 / ZD220, Argox OS-214 Plus, Elgin L42 Pro, Bematech).
+3. **Seleção de Peças e Quantidades**:
+   - Utilize a coluna esquerda para marcar as peças desejadas.
+   - Clique em **"Marcar Todos"** para etiquetar todo o acervo da loja.
+   - O campo **"Qtd"** define o número de etiquetas a imprimir de cada peça (você pode digitar a quantidade exata de peças que chegaram do ateliê).
+4. **Pré-visualização em Tempo Real (Live Preview)**:
+   - A coluna direita renderiza exatamente como a etiqueta será impressa.
+   - Cada etiqueta apresenta:
+     - Topo elegante: *✨ VÊNUS & LUAR BOUTIQUE*
+     - Nome da peça em alta resolução;
+     - Tamanho e Referência interna (ex: *Tam: M | Ref: MODA-001*);
+     - Código de barras oficial **GS1 EAN-13** vetorial nítido com números legíveis;
+     - Preço oficial de venda em destaque dourado (*R$ 389,90*).
+5. **Comando de Impressão**:
+   - Clique no botão dourado **[ 🖨️ Imprimir Etiquetas ]**.
+   - O navegador abre a caixa de diálogo de impressão já formatada milimetricamente para a impressora configurada, ocultando menus e elementos do sistema.
+
+---
+
+## 💎 6. Programa de Fidelidade & Cashback Haute Couture
+
+Um diferencial exclusivo para fidelizar as clientes da alta costura e frequentadoras do bistrô:
+
+1. **Como Funciona o Acúmulo de Cashback (5%)**:
+   - Toda compra faturada no **PDV Frente de Caixa** ou no **E-commerce Online** gera automaticamente **5% de cashback** sobre o valor líquido pago.
+   - Exemplo: Em uma compra de `R$ 450,00`, a cliente acumula `R$ 22,50` de crédito imediatamente.
+2. **Consulta de Saldo no Passo 1**:
+   - Assim que a operadora seleciona ou cadastra a cliente pelo CPF, o sistema consulta a carteira digital.
+   - Se a cliente possuir créditos, surge um elegante **selo VIP dourado**:
+     `💎 Fidelidade Haute Couture: R$ 45,50 disponível`.
+3. **Resgate de Créditos no Passo 3 (Pagamento)**:
+   - Ao avançar para o Passo 3, se houver saldo disponível, o PDV exibe a opção:
+     `[x] 💎 Resgatar Cashback (Abate até o valor total da compra)`.
+   - Ao marcar a caixa de seleção, o saldo é abatido instantaneamente do total a faturar.
+4. **Demonstrativo no Cupom Fiscal e WhatsApp**:
+   - O cupom fiscal de 80mm e a mensagem enviada pelo WhatsApp trazem o extrato completo:
+     - `💎 Resgate Cashback: - R$ 10,00`
+     - `💎 Cashback Gerado (5%): + R$ 22,45`
+     - `💎 Saldo Atual Fidelidade: R$ 57,95`
+   - Isso estimula a cliente a retornar à boutique para utilizar seus créditos na próxima coleção ou em um chá da tarde no bistrô.
+
+---
+
+## 📊 7. Monitor de Vendas & Relatório DRE (Para Gerência e Proprietária)
 
 1. No cabeçalho do PDV, clique em **[ 📊 Vendas da Boutique ]**.
 2. O painel apresenta:
@@ -157,18 +213,19 @@ Para uso do barista e da equipe da copa/cozinha:
 
 ---
 
-## 📦 6. Aba de Cadastro Inicial (Produtos, Estoque e Loja)
+## 📦 8. Aba de Cadastro Inicial (Produtos, Estoque e Loja)
 
 No topo do PDV, clique no botão **[ 📝 Aba de Cadastro Inicial ]**:
 - **Aba Clientes**: Lista completa de clientes cadastrados, permitindo conferir CPF e contatos.
 - **Aba Produtos & Estoque**: 
   - Cadastro rápido de novas peças com foto, nome, categoria, preço de venda e estoque inicial.
   - Ajuste de estoque físico em tempo real através dos botões de incremento e decremento rápido (`+1`, `-1`, `+5`, `-5`).
+  - Botão de etiqueta rápida `[ 🏷️ Etiqueta ]` para gerar etiqueta avulsa diretamente da lista de estoque.
 - **Aba Dados da Loja**: Consulta das credenciais fiscais da Boutique (Razão Social, CNPJ, Inscrição Estadual SEFAZ-ES e Endereço).
 
 ---
 
-## ❓ 7. Perguntas Frequentes & Resolução de Problemas no Balcão
+## ❓ 9. Perguntas Frequentes & Resolução de Problemas no Balcão
 
 ### O que fazer se a cliente não quiser informar o CPF?
 O sistema Vênus & Luar opera em conformidade rigorosa com a legislação fiscal da SEFAZ para comércio varejista de luxo, exigindo CPF válido de 11 dígitos para emissão da nota e garantia das peças de alta costura e joalheria. Explique gentilmente à cliente que o CPF garante a autenticidade e o certificado digital da compra.
